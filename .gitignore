@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+
+# OS files
+.DS_Store
+
+# Data (keep structure, not data)
+data/raw/*
+data/interim/*
+data/processed/*
+
+# Allow empty folders
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+
+# Reports outputs
+reports/figures/*
+reports/tables/*
+
+# Logs
+logs/
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# Joblib / model artifacts
+*.joblib

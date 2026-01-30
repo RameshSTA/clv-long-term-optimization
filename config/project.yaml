@@ -1,0 +1,23 @@
+project:
+  name: "Customer Lifetime Value (CLV) with Long-Term Optimization"
+  version: "1.0.0"
+  owner: "Ramesh Shrestha"
+
+dates:
+  cutoff_date: "2011-06-01"
+  holdout_days: 180
+  clv_horizon_days: 180
+
+paths:
+  input_excel: "data/raw/online_retail_II.xlsx"
+
+  interim_raw: "data/interim/transactions_raw.parquet"
+  interim_clean: "data/interim/transactions_clean.parquet"
+
+  features: "data/processed/customer_features.parquet"
+  clv_scores: "data/processed/customer_clv_scores.parquet"
+  churn_scores: "data/processed/customer_churn_risk_scores.parquet"
+  targeting_list: "data/processed/targeting_list.parquet"
+
+  reports_figures: "reports/figures"
+  reports_tables: "reports/tables"

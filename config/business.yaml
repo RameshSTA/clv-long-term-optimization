@@ -1,0 +1,12 @@
+budget:
+  total_budget: 5000
+  unit_cost_per_customer: 2.0
+
+retention:
+  assumed_effectiveness: 0.10
+
+eligibility:
+  min_clv: 0.0
+
+solver:
+  type: "pulp"

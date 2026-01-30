@@ -1,0 +1,9 @@
+clv_model:
+  penalizer_bgnbd: 0.001
+  penalizer_gg: 0.001
+  discount_rate_annual: 0.10
+
+churn_model:
+  churn_inactivity_days: 90
+  prediction_horizon_days: 180
+  model_type: "logistic"

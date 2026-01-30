@@ -1,0 +1,6 @@
+clv_lift:
+  deciles: 10
+
+reporting:
+  currency: "USD"
+  rounding: 2

@@ -28,10 +28,9 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -40,6 +39,7 @@ from lifetimes.utils import calibration_and_holdout_data
 
 try:
     import mlflow
+
     _MLFLOW_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _MLFLOW_AVAILABLE = False
@@ -51,6 +51,7 @@ LOGGER = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class CLVConfig:
     """Configuration for CLV model training and scoring."""
+
     transactions_path: Path
     output_path: Path
     cutoff_date: pd.Timestamp
@@ -211,7 +212,7 @@ def _assert_columns_present(df: pd.DataFrame, required: set[str], name: str) -> 
     ValueError
         If required columns are missing.
     """
-    missing = sorted(list(required - set(df.columns)))
+    missing = sorted(required - set(df.columns))
     if missing:
         raise ValueError(f"{name} missing required columns: {missing}. Found: {list(df.columns)}")
 
@@ -282,7 +283,9 @@ def infer_holdout_end(inv: pd.DataFrame, cutoff: pd.Timestamp, holdout_days: int
     return end
 
 
-def build_calibration_holdout(inv: pd.DataFrame, cutoff: pd.Timestamp, holdout_end: pd.Timestamp) -> pd.DataFrame:
+def build_calibration_holdout(
+    inv: pd.DataFrame, cutoff: pd.Timestamp, holdout_end: pd.Timestamp
+) -> pd.DataFrame:
     """
     Build customer summary table required for BG/NBD training and holdout evaluation.
 
@@ -318,7 +321,9 @@ def build_calibration_holdout(inv: pd.DataFrame, cutoff: pd.Timestamp, holdout_e
     return summary
 
 
-def compute_holdout_actuals(inv: pd.DataFrame, cutoff: pd.Timestamp, holdout_end: pd.Timestamp) -> pd.DataFrame:
+def compute_holdout_actuals(
+    inv: pd.DataFrame, cutoff: pd.Timestamp, holdout_end: pd.Timestamp
+) -> pd.DataFrame:
     """
     Compute actual holdout outcomes for evaluation.
 
@@ -340,17 +345,14 @@ def compute_holdout_actuals(inv: pd.DataFrame, cutoff: pd.Timestamp, holdout_end
     mask = (inv["invoice_dt"] > cutoff) & (inv["invoice_dt"] <= holdout_end)
     holdout = inv.loc[mask].copy()
 
-    actuals = (
-        holdout.groupby("customer_id", as_index=False)
-        .agg(
-            holdout_transactions=("invoice", "nunique"),
-            holdout_revenue=("revenue", "sum"),
-        )
+    actuals = holdout.groupby("customer_id", as_index=False).agg(
+        holdout_transactions=("invoice", "nunique"),
+        holdout_revenue=("revenue", "sum"),
     )
     return actuals
 
 
-def eval_predictions(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
+def eval_predictions(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
     """
     Compute simple regression-style metrics for holdout prediction.
 
@@ -373,7 +375,11 @@ def eval_predictions(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]
     rmse = float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
 
     nonzero = y_true != 0
-    mape = float(np.mean(np.abs((y_true[nonzero] - y_pred[nonzero]) / y_true[nonzero]))) if np.any(nonzero) else float("nan")
+    mape = (
+        float(np.mean(np.abs((y_true[nonzero] - y_pred[nonzero]) / y_true[nonzero])))
+        if np.any(nonzero)
+        else float("nan")
+    )
 
     return {"mae": mae, "rmse": rmse, "mape": mape}
 
@@ -425,7 +431,9 @@ def fit_bgnbd(summary: pd.DataFrame, penalizer: float) -> BetaGeoFitter:
     return model
 
 
-def fit_gamma_gamma(inv: pd.DataFrame, cutoff: pd.Timestamp, penalizer: float) -> Tuple[GammaGammaFitter, float]:
+def fit_gamma_gamma(
+    inv: pd.DataFrame, cutoff: pd.Timestamp, penalizer: float
+) -> tuple[GammaGammaFitter, float]:
     """
     Fit a Gamma-Gamma model for monetary value.
 
@@ -447,12 +455,9 @@ def fit_gamma_gamma(inv: pd.DataFrame, cutoff: pd.Timestamp, penalizer: float) -
     """
     inv_cal = inv.loc[inv["invoice_dt"] < cutoff].copy()
 
-    monetary = (
-        inv_cal.groupby("customer_id", as_index=False)
-        .agg(
-            frequency=("invoice", "nunique"),
-            monetary_value=("revenue", "mean"),
-        )
+    monetary = inv_cal.groupby("customer_id", as_index=False).agg(
+        frequency=("invoice", "nunique"),
+        monetary_value=("revenue", "mean"),
     )
 
     monetary = monetary.loc[monetary["frequency"] > 1].copy()
@@ -513,7 +518,9 @@ def score_customers(
     horizon_days = cfg.clv_horizon_days
     daily_discount = annual_to_daily_discount_rate(cfg.discount_rate_annual)
 
-    scores = summary[["customer_id", "frequency_cal", "recency_cal", "T_cal", "frequency_holdout"]].copy()
+    scores = summary[
+        ["customer_id", "frequency_cal", "recency_cal", "T_cal", "frequency_holdout"]
+    ].copy()
 
     scores["p_alive"] = bgnbd.conditional_probability_alive(
         frequency=scores["frequency_cal"],
@@ -546,7 +553,9 @@ def score_customers(
     # For short horizons this is adequate and transparent:
     # CLV ≈ E[N(horizon)] * E[value] discounted by the horizon length.
     discount_factor = 1.0 / ((1.0 + daily_discount) ** horizon_days)
-    scores["clv_horizon"] = scores["exp_purchases_horizon"] * scores["exp_avg_value"] * discount_factor
+    scores["clv_horizon"] = (
+        scores["exp_purchases_horizon"] * scores["exp_avg_value"] * discount_factor
+    )
 
     # Metadata
     scores["cutoff_date"] = cfg.cutoff_date
@@ -621,7 +630,7 @@ def build_decile_evaluation(eval_df: pd.DataFrame) -> pd.DataFrame:
 
 def _log_clv_to_mlflow(
     cfg: CLVConfig,
-    txn_metrics: Dict[str, float],
+    txn_metrics: dict[str, float],
     spearman_corr: float,
     deciles: pd.DataFrame,
 ) -> None:
@@ -663,7 +672,9 @@ def _log_clv_to_mlflow(
                     "holdout_txn_mape": txn_metrics.get("mape", float("nan")),
                     "spearman_clv_vs_holdout_revenue": spearman_corr,
                     "top_decile_avg_holdout_revenue": float(
-                        deciles.loc[deciles["decile"] == deciles["decile"].max(), "avg_holdout_revenue"].iloc[0]
+                        deciles.loc[
+                            deciles["decile"] == deciles["decile"].max(), "avg_holdout_revenue"
+                        ].iloc[0]
                     ),
                 }
             )
@@ -706,7 +717,9 @@ def run(cfg: CLVConfig) -> None:
     LOGGER.info("Invoice-level transactions shape=%s", inv.shape)
 
     holdout_end = infer_holdout_end(inv, cfg.cutoff_date, cfg.holdout_days)
-    LOGGER.info("Using cutoff_date=%s and holdout_end=%s", cfg.cutoff_date.date(), holdout_end.date())
+    LOGGER.info(
+        "Using cutoff_date=%s and holdout_end=%s", cfg.cutoff_date.date(), holdout_end.date()
+    )
 
     summary = build_calibration_holdout(inv, cfg.cutoff_date, holdout_end)
     LOGGER.info("Calibration/holdout summary shape=%s", summary.shape)
@@ -719,7 +732,9 @@ def run(cfg: CLVConfig) -> None:
 
     # Fit models
     bgnbd = fit_bgnbd(summary, penalizer=cfg.penalizer_coef_bgnbd)
-    gg, global_mean_value = fit_gamma_gamma(inv, cutoff=cfg.cutoff_date, penalizer=cfg.penalizer_coef_gg)
+    gg, global_mean_value = fit_gamma_gamma(
+        inv, cutoff=cfg.cutoff_date, penalizer=cfg.penalizer_coef_gg
+    )
 
     # Holdout transaction count prediction for evaluation
     holdout_length_days = int((holdout_end - cfg.cutoff_date).days)
@@ -747,7 +762,9 @@ def run(cfg: CLVConfig) -> None:
     )
 
     # Decile evaluation for interpretability
-    eval_for_deciles = eval_df.merge(scores[["customer_id", "clv_horizon"]], on="customer_id", how="left")
+    eval_for_deciles = eval_df.merge(
+        scores[["customer_id", "clv_horizon"]], on="customer_id", how="left"
+    )
     deciles = build_decile_evaluation(eval_for_deciles)
     LOGGER.info("Decile evaluation (1=lowest,10=highest):\n%s", deciles.to_string(index=False))
 
@@ -770,7 +787,9 @@ def run(cfg: CLVConfig) -> None:
     deciles.to_csv(decile_path, index=False)
     LOGGER.info("CLV decile calibration table written to '%s'", str(decile_path))
 
-    _log_clv_to_mlflow(cfg=cfg, txn_metrics=txn_metrics, spearman_corr=spearman_corr, deciles=deciles)
+    _log_clv_to_mlflow(
+        cfg=cfg, txn_metrics=txn_metrics, spearman_corr=spearman_corr, deciles=deciles
+    )
 
     LOGGER.info("Step 4 completed successfully")
 

@@ -35,9 +35,9 @@ from __future__ import annotations
 
 import argparse
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -49,11 +49,13 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
+    auc as sklearn_auc,
+)
+from sklearn.metrics import (
     average_precision_score,
     precision_recall_curve,
     roc_auc_score,
     roc_curve,
-    auc as sklearn_auc,
 )
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.pipeline import Pipeline
@@ -61,18 +63,21 @@ from sklearn.preprocessing import StandardScaler
 
 try:
     import xgboost as xgb
+
     _XGB_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _XGB_AVAILABLE = False
 
 try:
     import lightgbm as lgb
+
     _LGB_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _LGB_AVAILABLE = False
 
 try:
     import shap
+
     _SHAP_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _SHAP_AVAILABLE = False
@@ -80,6 +85,7 @@ except ImportError:  # pragma: no cover
 try:
     import mlflow
     import mlflow.sklearn
+
     _MLFLOW_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _MLFLOW_AVAILABLE = False
@@ -91,6 +97,7 @@ LOGGER = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class ChurnConfig:
     """Configuration for churn model training and scoring."""
+
     transactions_path: Path
     features_path: Path
     output_scores_path: Path
@@ -106,7 +113,7 @@ class ChurnConfig:
     mlflow_experiment: str
 
 
-FEATURE_COLUMNS: Tuple[str, ...] = (
+FEATURE_COLUMNS: tuple[str, ...] = (
     "recency_days",
     "tenure_days",
     "n_invoices",
@@ -165,21 +172,31 @@ def parse_args(argv: Sequence[str] | None = None) -> ChurnConfig:
         to their correct Python types (``Path``, ``pd.Timestamp``, ``int``).
     """
     parser = argparse.ArgumentParser(description="Train churn risk model and score customers.")
-    parser.add_argument("--transactions-path", type=str,
-                        default="data/interim/transactions_clean.parquet")
-    parser.add_argument("--features-path", type=str,
-                        default="data/processed/customer_features.parquet")
-    parser.add_argument("--output-scores-path", type=str,
-                        default="data/processed/customer_churn_risk_scores.parquet")
-    parser.add_argument("--output-model-path", type=str,
-                        default="data/processed/churn_risk_model.joblib")
+    parser.add_argument(
+        "--transactions-path", type=str, default="data/interim/transactions_clean.parquet"
+    )
+    parser.add_argument(
+        "--features-path", type=str, default="data/processed/customer_features.parquet"
+    )
+    parser.add_argument(
+        "--output-scores-path",
+        type=str,
+        default="data/processed/customer_churn_risk_scores.parquet",
+    )
+    parser.add_argument(
+        "--output-model-path", type=str, default="data/processed/churn_risk_model.joblib"
+    )
     parser.add_argument("--cutoff-date", type=str, default="2011-06-01")
     parser.add_argument("--prediction-horizon-days", type=int, default=180)
     parser.add_argument("--churn-inactivity-days", type=int, default=90)
     parser.add_argument("--eval-gap-days", type=int, default=60)
-    parser.add_argument("--model-type", type=str, default="auto",
-                        choices=["auto", "logistic", "random_forest", "xgboost", "lightgbm"],
-                        help="Model to use. 'auto' runs comparison and picks best by CV AUC.")
+    parser.add_argument(
+        "--model-type",
+        type=str,
+        default="auto",
+        choices=["auto", "logistic", "random_forest", "xgboost", "lightgbm"],
+        help="Model to use. 'auto' runs comparison and picks best by CV AUC.",
+    )
     parser.add_argument("--random-state", type=int, default=42)
     parser.add_argument("--cv-folds", type=int, default=5)
     parser.add_argument("--mlflow-experiment", type=str, default="churn_risk_model")
@@ -204,7 +221,7 @@ def parse_args(argv: Sequence[str] | None = None) -> ChurnConfig:
 
 
 def _assert_columns_present(df: pd.DataFrame, required: set[str], name: str) -> None:
-    missing = sorted(list(required - set(df.columns)))
+    missing = sorted(required - set(df.columns))
     if missing:
         raise ValueError(f"{name} missing required columns: {missing}. Found: {list(df.columns)}")
 
@@ -246,19 +263,21 @@ def compute_churn_labels(
 
     obs_end = cutoff + pd.Timedelta(days=horizon_days)
     post = inv.loc[(inv["invoice_dt"] > cutoff) & (inv["invoice_dt"] <= obs_end)].copy()
-    first_post = post.groupby("customer_id")["invoice_dt"].min().rename("first_purchase_post_cutoff")
+    first_post = (
+        post.groupby("customer_id")["invoice_dt"].min().rename("first_purchase_post_cutoff")
+    )
 
     labels = pd.DataFrame({"customer_id": pd.Series(customers).astype("Int64")})
     labels = labels.merge(first_post.reset_index(), on="customer_id", how="left")
     labels["days_to_next_purchase"] = (labels["first_purchase_post_cutoff"] - cutoff).dt.days
     labels["churn_label"] = (
-        labels["days_to_next_purchase"].isna()
-        | (labels["days_to_next_purchase"] > inactivity_days)
+        labels["days_to_next_purchase"].isna() | (labels["days_to_next_purchase"] > inactivity_days)
     ).astype(int)
     labels["days_to_next_purchase"] = labels["days_to_next_purchase"].fillna(np.inf)
 
-    out = labels[["customer_id", "first_purchase_post_cutoff",
-                  "days_to_next_purchase", "churn_label"]].copy()
+    out = labels[
+        ["customer_id", "first_purchase_post_cutoff", "days_to_next_purchase", "churn_label"]
+    ].copy()
     out["customer_id"] = out["customer_id"].astype("int64")
     return out
 
@@ -286,10 +305,11 @@ def build_snapshot(
 # Model candidate construction
 # ---------------------------------------------------------------------------
 
+
 def _build_candidate_pipelines(
-    feature_cols: Tuple[str, ...],
+    feature_cols: tuple[str, ...],
     random_state: int,
-) -> Dict[str, Pipeline]:
+) -> dict[str, Pipeline]:
     """
     Build one sklearn Pipeline per candidate model type.
 
@@ -298,12 +318,21 @@ def _build_candidate_pipelines(
     - Tree models: only need imputation (invariant to monotone transforms).
     - All pipelines share the same interface: fit(X, y) and predict_proba(X).
     """
+
     def _imputer_scaler_ct():
         return ColumnTransformer(
-            transformers=[("num", Pipeline([
-                ("imputer", SimpleImputer(strategy="median")),
-                ("scaler", StandardScaler()),
-            ]), list(feature_cols))],
+            transformers=[
+                (
+                    "num",
+                    Pipeline(
+                        [
+                            ("imputer", SimpleImputer(strategy="median")),
+                            ("scaler", StandardScaler()),
+                        ]
+                    ),
+                    list(feature_cols),
+                )
+            ],
             remainder="drop",
             verbose_feature_names_out=False,
         )
@@ -315,55 +344,75 @@ def _build_candidate_pipelines(
             verbose_feature_names_out=False,
         )
 
-    candidates: Dict[str, Pipeline] = {
-        "logistic_regression": Pipeline([
-            ("preprocess", _imputer_scaler_ct()),
-            ("clf", LogisticRegression(
-                max_iter=3000,
-                class_weight="balanced",
-                solver="lbfgs",
-                random_state=random_state,
-            )),
-        ]),
-        "random_forest": Pipeline([
-            ("preprocess", _imputer_only_ct()),
-            ("clf", RandomForestClassifier(
-                n_estimators=300,
-                max_depth=8,
-                class_weight="balanced",
-                random_state=random_state,
-                n_jobs=-1,
-            )),
-        ]),
+    candidates: dict[str, Pipeline] = {
+        "logistic_regression": Pipeline(
+            [
+                ("preprocess", _imputer_scaler_ct()),
+                (
+                    "clf",
+                    LogisticRegression(
+                        max_iter=3000,
+                        class_weight="balanced",
+                        solver="lbfgs",
+                        random_state=random_state,
+                    ),
+                ),
+            ]
+        ),
+        "random_forest": Pipeline(
+            [
+                ("preprocess", _imputer_only_ct()),
+                (
+                    "clf",
+                    RandomForestClassifier(
+                        n_estimators=300,
+                        max_depth=8,
+                        class_weight="balanced",
+                        random_state=random_state,
+                        n_jobs=-1,
+                    ),
+                ),
+            ]
+        ),
     }
 
     if _XGB_AVAILABLE:
-        candidates["xgboost"] = Pipeline([
-            ("preprocess", _imputer_only_ct()),
-            ("clf", xgb.XGBClassifier(
-                n_estimators=300,
-                max_depth=5,
-                learning_rate=0.05,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                random_state=random_state,
-                eval_metric="logloss",
-                verbosity=0,
-            )),
-        ])
+        candidates["xgboost"] = Pipeline(
+            [
+                ("preprocess", _imputer_only_ct()),
+                (
+                    "clf",
+                    xgb.XGBClassifier(
+                        n_estimators=300,
+                        max_depth=5,
+                        learning_rate=0.05,
+                        subsample=0.8,
+                        colsample_bytree=0.8,
+                        random_state=random_state,
+                        eval_metric="logloss",
+                        verbosity=0,
+                    ),
+                ),
+            ]
+        )
 
     if _LGB_AVAILABLE:
-        candidates["lightgbm"] = Pipeline([
-            ("preprocess", _imputer_only_ct()),
-            ("clf", lgb.LGBMClassifier(
-                n_estimators=300,
-                num_leaves=31,
-                learning_rate=0.05,
-                is_unbalance=True,
-                random_state=random_state,
-                verbose=-1,
-            )),
-        ])
+        candidates["lightgbm"] = Pipeline(
+            [
+                ("preprocess", _imputer_only_ct()),
+                (
+                    "clf",
+                    lgb.LGBMClassifier(
+                        n_estimators=300,
+                        num_leaves=31,
+                        learning_rate=0.05,
+                        is_unbalance=True,
+                        random_state=random_state,
+                        verbose=-1,
+                    ),
+                ),
+            ]
+        )
 
     return candidates
 
@@ -371,10 +420,10 @@ def _build_candidate_pipelines(
 def compare_models(
     X: pd.DataFrame,
     y: pd.Series,
-    feature_cols: Tuple[str, ...],
+    feature_cols: tuple[str, ...],
     cv_folds: int,
     random_state: int,
-) -> Tuple[pd.DataFrame, str, Pipeline]:
+) -> tuple[pd.DataFrame, str, Pipeline]:
     """
     Systematically compare candidate churn models via stratified k-fold CV.
 
@@ -395,27 +444,34 @@ def compare_models(
         LOGGER.info("Running %d-fold CV for: %s", cv_folds, name)
         auc_scores = cross_val_score(pipe, X, y, cv=cv, scoring="roc_auc", n_jobs=-1)
         ap_scores = cross_val_score(pipe, X, y, cv=cv, scoring="average_precision", n_jobs=-1)
-        results.append({
-            "model": name,
-            "cv_roc_auc_mean": float(auc_scores.mean()),
-            "cv_roc_auc_std": float(auc_scores.std()),
-            "cv_avg_precision_mean": float(ap_scores.mean()),
-            "cv_avg_precision_std": float(ap_scores.std()),
-        })
-        LOGGER.info("  %s: AUC=%.4f ± %.4f  AP=%.4f ± %.4f",
-                    name, auc_scores.mean(), auc_scores.std(),
-                    ap_scores.mean(), ap_scores.std())
+        results.append(
+            {
+                "model": name,
+                "cv_roc_auc_mean": float(auc_scores.mean()),
+                "cv_roc_auc_std": float(auc_scores.std()),
+                "cv_avg_precision_mean": float(ap_scores.mean()),
+                "cv_avg_precision_std": float(ap_scores.std()),
+            }
+        )
+        LOGGER.info(
+            "  %s: AUC=%.4f ± %.4f  AP=%.4f ± %.4f",
+            name,
+            auc_scores.mean(),
+            auc_scores.std(),
+            ap_scores.mean(),
+            ap_scores.std(),
+        )
 
     comparison_df = (
-        pd.DataFrame(results)
-        .sort_values("cv_roc_auc_mean", ascending=False)
-        .reset_index(drop=True)
+        pd.DataFrame(results).sort_values("cv_roc_auc_mean", ascending=False).reset_index(drop=True)
     )
     best_model_name = comparison_df.iloc[0]["model"]
-    LOGGER.info("Selected model: %s (CV ROC AUC=%.4f ± %.4f)",
-                best_model_name,
-                comparison_df.iloc[0]["cv_roc_auc_mean"],
-                comparison_df.iloc[0]["cv_roc_auc_std"])
+    LOGGER.info(
+        "Selected model: %s (CV ROC AUC=%.4f ± %.4f)",
+        best_model_name,
+        comparison_df.iloc[0]["cv_roc_auc_mean"],
+        comparison_df.iloc[0]["cv_roc_auc_std"],
+    )
 
     # Fit winner on full training data
     best_model = candidates[best_model_name]
@@ -428,12 +484,15 @@ def compare_models(
 # Legacy single-model builder (used by tests; kept for backwards compatibility)
 # ---------------------------------------------------------------------------
 
-def make_model(feature_cols: Tuple[str, ...], random_state: int = 42) -> Pipeline:
+
+def make_model(feature_cols: tuple[str, ...], random_state: int = 42) -> Pipeline:
     """Build the logistic regression churn pipeline (baseline model)."""
-    numeric_transformer = Pipeline(steps=[
-        ("imputer", SimpleImputer(strategy="median")),
-        ("scaler", StandardScaler(with_mean=True, with_std=True)),
-    ])
+    numeric_transformer = Pipeline(
+        steps=[
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scaler", StandardScaler(with_mean=True, with_std=True)),
+        ]
+    )
     preprocessor = ColumnTransformer(
         transformers=[("num", numeric_transformer, list(feature_cols))],
         remainder="drop",
@@ -454,7 +513,7 @@ def cross_validate_model(
     y: pd.Series,
     cv_folds: int,
     random_state: int,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Stratified k-fold cross-validation for a single model."""
     cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=random_state)
     auc_scores = cross_val_score(model, X, y, cv=cv, scoring="roc_auc")
@@ -468,14 +527,20 @@ def cross_validate_model(
     }
 
 
-def extract_feature_importance(model: Pipeline, feature_cols: Tuple[str, ...]) -> pd.DataFrame:
+def extract_feature_importance(model: Pipeline, feature_cols: tuple[str, ...]) -> pd.DataFrame:
     """Extract logistic regression coefficients as feature importance."""
     coef = model.named_steps["clf"].coef_[0]
-    importance = pd.DataFrame({
-        "feature": list(feature_cols),
-        "coefficient": coef,
-        "abs_coefficient": np.abs(coef),
-    }).sort_values("abs_coefficient", ascending=False).reset_index(drop=True)
+    importance = (
+        pd.DataFrame(
+            {
+                "feature": list(feature_cols),
+                "coefficient": coef,
+                "abs_coefficient": np.abs(coef),
+            }
+        )
+        .sort_values("abs_coefficient", ascending=False)
+        .reset_index(drop=True)
+    )
     importance["direction"] = importance["coefficient"].apply(
         lambda c: "increases_churn" if c > 0 else "decreases_churn"
     )
@@ -486,12 +551,13 @@ def extract_feature_importance(model: Pipeline, feature_cols: Tuple[str, ...]) -
 # SHAP interpretability
 # ---------------------------------------------------------------------------
 
+
 def compute_shap_values(
     model: Pipeline,
     X: pd.DataFrame,
-    feature_cols: Tuple[str, ...],
+    feature_cols: tuple[str, ...],
     model_name: str,
-) -> Tuple[np.ndarray, pd.DataFrame]:
+) -> tuple[np.ndarray, pd.DataFrame]:
     """
     Compute SHAP values for the fitted pipeline.
 
@@ -544,7 +610,7 @@ def compute_shap_values(
 def _shap_feature_importance(
     shap_vals: np.ndarray,
     X_df: pd.DataFrame,
-    feature_cols: Tuple[str, ...],
+    feature_cols: tuple[str, ...],
 ) -> pd.DataFrame:
     """Build feature importance from mean |SHAP| values (model-agnostic)."""
     mean_abs = np.abs(shap_vals).mean(axis=0)
@@ -555,17 +621,24 @@ def _shap_feature_importance(
         corr = float(np.corrcoef(X_df.iloc[:, i].values, shap_vals[:, i])[0, 1])
         directions.append("increases_churn" if corr > 0 else "decreases_churn")
 
-    importance = pd.DataFrame({
-        "feature": list(feature_cols),
-        "mean_abs_shap": mean_abs,
-        "direction": directions,
-    }).sort_values("mean_abs_shap", ascending=False).reset_index(drop=True)
+    importance = (
+        pd.DataFrame(
+            {
+                "feature": list(feature_cols),
+                "mean_abs_shap": mean_abs,
+                "direction": directions,
+            }
+        )
+        .sort_values("mean_abs_shap", ascending=False)
+        .reset_index(drop=True)
+    )
     return importance
 
 
 # ---------------------------------------------------------------------------
 # Plotting
 # ---------------------------------------------------------------------------
+
 
 def plot_model_comparison(comparison_df: pd.DataFrame, output_path: Path) -> None:
     """Horizontal bar chart comparing CV ROC AUC across candidate models."""
@@ -576,25 +649,41 @@ def plot_model_comparison(comparison_df: pd.DataFrame, output_path: Path) -> Non
     stds = comparison_df["cv_roc_auc_std"].values
     colors = ["#1565C0" if i == 0 else "#90CAF9" for i in range(len(labels))]
 
-    bars = ax.barh(labels[::-1], aucs[::-1], xerr=stds[::-1],
-                   color=colors[::-1], capsize=4, edgecolor="white", linewidth=0.5)
+    bars = ax.barh(
+        labels[::-1],
+        aucs[::-1],
+        xerr=stds[::-1],
+        color=colors[::-1],
+        capsize=4,
+        edgecolor="white",
+        linewidth=0.5,
+    )
 
     for bar, val, std in zip(bars, aucs[::-1], stds[::-1]):
-        ax.text(val + std + 0.003, bar.get_y() + bar.get_height() / 2,
-                f"{val:.3f} ± {std:.3f}", va="center", ha="left", fontsize=9, fontweight="bold")
+        ax.text(
+            val + std + 0.003,
+            bar.get_y() + bar.get_height() / 2,
+            f"{val:.3f} ± {std:.3f}",
+            va="center",
+            ha="left",
+            fontsize=9,
+            fontweight="bold",
+        )
 
     ax.set_xlabel("CV ROC AUC (mean ± 1 std, stratified k-fold)", fontsize=11)
-    ax.set_title("Churn Model Comparison — Cross-Validated Performance",
-                 fontsize=12, fontweight="bold")
+    ax.set_title(
+        "Churn Model Comparison — Cross-Validated Performance", fontsize=12, fontweight="bold"
+    )
     ax.set_xlim(0.48, 1.05)
-    ax.axvline(x=0.5, color="gray", linestyle="--", alpha=0.6, linewidth=1, label="Random baseline (0.50)")
+    ax.axvline(
+        x=0.5, color="gray", linestyle="--", alpha=0.6, linewidth=1, label="Random baseline (0.50)"
+    )
     ax.grid(axis="x", alpha=0.3)
     ax.legend(fontsize=9)
 
     # Best model label
     best = comparison_df.iloc[0]["model"].replace("_", " ").title()
-    ax.set_title(f"Churn Model Comparison — Best: {best}",
-                 fontsize=12, fontweight="bold")
+    ax.set_title(f"Churn Model Comparison — Best: {best}", fontsize=12, fontweight="bold")
 
     fig.tight_layout()
     ensure_parent_dir(output_path)
@@ -622,7 +711,8 @@ def plot_shap_summary(
     ax.barh(
         [feature_names[i] for i in sorted_idx],
         [mean_abs[i] for i in sorted_idx],
-        color="#1565C0", edgecolor="white",
+        color="#1565C0",
+        edgecolor="white",
     )
     ax.set_xlabel("Mean |SHAP value|  (avg impact on model output)", fontsize=10)
     ax.set_title("Feature Importance (SHAP)", fontsize=11, fontweight="bold")
@@ -637,14 +727,16 @@ def plot_shap_summary(
         sv = shap_vals[:, feat_idx]
         # Normalize color to [0,1]
         norm = (col_vals - col_vals.min()) / (col_vals.max() - col_vals.min() + 1e-9)
-        ax2.scatter(sv, [rank] * len(sv), c=norm, cmap="coolwarm",
-                    alpha=0.4, s=12, linewidths=0)
+        ax2.scatter(sv, [rank] * len(sv), c=norm, cmap="coolwarm", alpha=0.4, s=12, linewidths=0)
 
     ax2.set_yticks(list(y_positions))
     ax2.set_yticklabels([feature_names[i] for i in top5], fontsize=10)
     ax2.set_xlabel("SHAP value (impact on churn probability)", fontsize=10)
-    ax2.set_title("SHAP Values — Top 5 Features\n(color = feature value: blue=low, red=high)",
-                  fontsize=10, fontweight="bold")
+    ax2.set_title(
+        "SHAP Values — Top 5 Features\n(color = feature value: blue=low, red=high)",
+        fontsize=10,
+        fontweight="bold",
+    )
     ax2.axvline(0, color="black", linestyle="--", linewidth=0.8, alpha=0.6)
     ax2.grid(axis="x", alpha=0.3)
 
@@ -670,10 +762,16 @@ def plot_calibration_curve(
     # Panel 1: reliability diagram
     ax = axes[0]
     ax.plot([0, 1], [0, 1], "k--", linewidth=1.2, label="Perfect calibration")
-    ax.plot(mpv, fop, "o-", color="#1565C0", linewidth=2, markersize=7,
-            label=model_name.replace("_", " ").title())
-    ax.fill_between(mpv, fop, mpv, alpha=0.15, color="#F44336",
-                    label="Calibration gap")
+    ax.plot(
+        mpv,
+        fop,
+        "o-",
+        color="#1565C0",
+        linewidth=2,
+        markersize=7,
+        label=model_name.replace("_", " ").title(),
+    )
+    ax.fill_between(mpv, fop, mpv, alpha=0.15, color="#F44336", label="Calibration gap")
     ax.set_xlabel("Mean predicted churn probability", fontsize=11)
     ax.set_ylabel("Observed churn rate (fraction of positives)", fontsize=11)
     ax.set_title("Calibration Curve (Reliability Diagram)", fontsize=11, fontweight="bold")
@@ -684,18 +782,33 @@ def plot_calibration_curve(
 
     # Panel 2: score distribution by label
     ax2 = axes[1]
-    ax2.hist(y_prob[y_true == 0], bins=25, alpha=0.65, color="#4CAF50",
-             label="Active customers (churn=0)", density=True)
-    ax2.hist(y_prob[y_true == 1], bins=25, alpha=0.65, color="#F44336",
-             label="Churned customers (churn=1)", density=True)
+    ax2.hist(
+        y_prob[y_true == 0],
+        bins=25,
+        alpha=0.65,
+        color="#4CAF50",
+        label="Active customers (churn=0)",
+        density=True,
+    )
+    ax2.hist(
+        y_prob[y_true == 1],
+        bins=25,
+        alpha=0.65,
+        color="#F44336",
+        label="Churned customers (churn=1)",
+        density=True,
+    )
     ax2.set_xlabel("Predicted churn probability", fontsize=11)
     ax2.set_ylabel("Density", fontsize=11)
     ax2.set_title("Score Distribution by True Label", fontsize=11, fontweight="bold")
     ax2.legend(fontsize=9)
     ax2.grid(alpha=0.3)
 
-    fig.suptitle(f"Model Calibration Analysis — {model_name.replace('_', ' ').title()}",
-                 fontsize=13, fontweight="bold")
+    fig.suptitle(
+        f"Model Calibration Analysis — {model_name.replace('_', ' ').title()}",
+        fontsize=13,
+        fontweight="bold",
+    )
     fig.tight_layout()
     ensure_parent_dir(output_path)
     fig.savefig(output_path, dpi=150, bbox_inches="tight")
@@ -721,8 +834,7 @@ def plot_roc_pr_curves(
 
     # ROC curve
     ax = axes[0]
-    ax.plot(fpr, tpr, color="#1565C0", linewidth=2.5,
-            label=f"{display_name} (AUC = {roc_auc:.3f})")
+    ax.plot(fpr, tpr, color="#1565C0", linewidth=2.5, label=f"{display_name} (AUC = {roc_auc:.3f})")
     ax.plot([0, 1], [0, 1], "k--", linewidth=1, label="Random (AUC = 0.500)")
     ax.fill_between(fpr, tpr, alpha=0.12, color="#1565C0")
     ax.set_xlabel("False Positive Rate (1 – Specificity)", fontsize=11)
@@ -735,12 +847,23 @@ def plot_roc_pr_curves(
 
     # Precision-Recall curve
     ax2 = axes[1]
-    ax2.plot(recall, precision, color="#C62828", linewidth=2.5,
-             label=f"{display_name} (AUC = {pr_auc:.3f})")
-    ax2.axhline(y=base_rate, color="gray", linestyle="--", linewidth=1.2,
-                label=f"No-skill baseline ({base_rate:.2f})")
-    ax2.fill_between(recall, precision, base_rate, alpha=0.12, color="#C62828",
-                     where=(precision > base_rate))
+    ax2.plot(
+        recall,
+        precision,
+        color="#C62828",
+        linewidth=2.5,
+        label=f"{display_name} (AUC = {pr_auc:.3f})",
+    )
+    ax2.axhline(
+        y=base_rate,
+        color="gray",
+        linestyle="--",
+        linewidth=1.2,
+        label=f"No-skill baseline ({base_rate:.2f})",
+    )
+    ax2.fill_between(
+        recall, precision, base_rate, alpha=0.12, color="#C62828", where=(precision > base_rate)
+    )
     ax2.set_xlabel("Recall", fontsize=11)
     ax2.set_ylabel("Precision", fontsize=11)
     ax2.set_title("Precision-Recall Curve", fontsize=12, fontweight="bold")
@@ -749,8 +872,7 @@ def plot_roc_pr_curves(
     ax2.set_xlim(-0.01, 1.01)
     ax2.set_ylim(-0.01, 1.01)
 
-    fig.suptitle(f"Churn Model Evaluation — {display_name}",
-                 fontsize=13, fontweight="bold")
+    fig.suptitle(f"Churn Model Evaluation — {display_name}", fontsize=13, fontweight="bold")
     fig.tight_layout()
     ensure_parent_dir(output_path)
     fig.savefig(output_path, dpi=150, bbox_inches="tight")
@@ -762,7 +884,8 @@ def plot_roc_pr_curves(
 # Core train / evaluate / score
 # ---------------------------------------------------------------------------
 
-def evaluate_probabilities(y_true: np.ndarray, y_prob: np.ndarray) -> Dict[str, float]:
+
+def evaluate_probabilities(y_true: np.ndarray, y_prob: np.ndarray) -> dict[str, float]:
     y_true = np.asarray(y_true, dtype=int)
     y_prob = np.asarray(y_prob, dtype=float)
     if len(np.unique(y_true)) <= 1:
@@ -788,7 +911,7 @@ def train_and_evaluate(
     inv: pd.DataFrame,
     features: pd.DataFrame,
     cfg: ChurnConfig,
-) -> Tuple[Pipeline, Dict[str, float], pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+) -> tuple[Pipeline, dict[str, float], pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Full churn modeling pipeline:
       1. Generate time-safe training + test labels.
@@ -810,13 +933,15 @@ def train_and_evaluate(
 
     # Training labels
     train_labels = compute_churn_labels(
-        inv=inv, cutoff=cfg.cutoff_date,
+        inv=inv,
+        cutoff=cfg.cutoff_date,
         horizon_days=cfg.prediction_horizon_days,
         inactivity_days=cfg.churn_inactivity_days,
         customers=customers,
     )
     train_frame = build_snapshot(
-        features=features, labels=train_labels,
+        features=features,
+        labels=train_labels,
         cutoff=cfg.cutoff_date,
         horizon_days=cfg.prediction_horizon_days,
         inactivity_days=cfg.churn_inactivity_days,
@@ -827,13 +952,15 @@ def train_and_evaluate(
     # Out-of-time test labels
     test_cutoff = cfg.cutoff_date + pd.Timedelta(days=cfg.eval_gap_days)
     test_labels = compute_churn_labels(
-        inv=inv, cutoff=test_cutoff,
+        inv=inv,
+        cutoff=test_cutoff,
         horizon_days=cfg.prediction_horizon_days,
         inactivity_days=cfg.churn_inactivity_days,
         customers=customers,
     )
     test_frame = build_snapshot(
-        features=features, labels=test_labels,
+        features=features,
+        labels=test_labels,
         cutoff=test_cutoff,
         horizon_days=cfg.prediction_horizon_days,
         inactivity_days=cfg.churn_inactivity_days,
@@ -844,7 +971,8 @@ def train_and_evaluate(
     # --- Model comparison and selection ---
     if cfg.model_type == "auto":
         comparison_df, best_model_name, model = compare_models(
-            X=X_train, y=y_train,
+            X=X_train,
+            y=y_train,
             feature_cols=FEATURE_COLUMNS,
             cv_folds=cfg.cv_folds,
             random_state=cfg.random_state,
@@ -857,13 +985,17 @@ def train_and_evaluate(
         cv_single = cross_validate_model(model, X_train, y_train, cfg.cv_folds, cfg.random_state)
         model.fit(X_train, y_train)
         best_model_name = model_name
-        comparison_df = pd.DataFrame([{
-            "model": model_name,
-            "cv_roc_auc_mean": cv_single["cv_roc_auc_mean"],
-            "cv_roc_auc_std": cv_single["cv_roc_auc_std"],
-            "cv_avg_precision_mean": cv_single["cv_avg_precision_mean"],
-            "cv_avg_precision_std": cv_single["cv_avg_precision_std"],
-        }])
+        comparison_df = pd.DataFrame(
+            [
+                {
+                    "model": model_name,
+                    "cv_roc_auc_mean": cv_single["cv_roc_auc_mean"],
+                    "cv_roc_auc_std": cv_single["cv_roc_auc_std"],
+                    "cv_avg_precision_mean": cv_single["cv_avg_precision_mean"],
+                    "cv_avg_precision_std": cv_single["cv_avg_precision_std"],
+                }
+            ]
+        )
 
     # Holdout evaluation
     y_test_prob = model.predict_proba(X_test)[:, 1]
@@ -884,11 +1016,15 @@ def train_and_evaluate(
     LOGGER.info("Generating evaluation plots...")
     plot_model_comparison(comparison_df, Path("reports/figures/churn_model_comparison.png"))
     plot_roc_pr_curves(
-        y_test.values, y_test_prob, best_model_name,
+        y_test.values,
+        y_test_prob,
+        best_model_name,
         Path("reports/figures/churn_roc_pr_curves.png"),
     )
     plot_calibration_curve(
-        y_test.values, y_test_prob, best_model_name,
+        y_test.values,
+        y_test_prob,
+        best_model_name,
         Path("reports/figures/churn_calibration_curve.png"),
     )
 
@@ -901,7 +1037,10 @@ def train_and_evaluate(
         X_shap = X_train.iloc[shap_idx].reset_index(drop=True)
 
         shap_vals, X_transformed = compute_shap_values(
-            model, X_shap, FEATURE_COLUMNS, best_model_name,
+            model,
+            X_shap,
+            FEATURE_COLUMNS,
+            best_model_name,
         )
         plot_shap_summary(shap_vals, X_transformed, Path("reports/figures/churn_shap_summary.png"))
         feature_importance = _shap_feature_importance(shap_vals, X_transformed, FEATURE_COLUMNS)
@@ -917,23 +1056,31 @@ def train_and_evaluate(
             importance_score = clf.feature_importances_
         else:
             importance_score = np.zeros(len(FEATURE_COLUMNS))
-        feature_importance = pd.DataFrame({
-            "feature": list(FEATURE_COLUMNS),
-            "importance_score": importance_score,
-            "direction": ["unknown"] * len(FEATURE_COLUMNS),
-            "importance_type": "builtin",
-        }).sort_values("importance_score", ascending=False).reset_index(drop=True)
+        feature_importance = (
+            pd.DataFrame(
+                {
+                    "feature": list(FEATURE_COLUMNS),
+                    "importance_score": importance_score,
+                    "direction": ["unknown"] * len(FEATURE_COLUMNS),
+                    "importance_type": "builtin",
+                }
+            )
+            .sort_values("importance_score", ascending=False)
+            .reset_index(drop=True)
+        )
 
     # Scores at training cutoff
     y_train_prob = model.predict_proba(X_train)[:, 1]
-    scored = pd.DataFrame({
-        "customer_id": train_frame["customer_id"].astype("int64"),
-        "cutoff_date": cfg.cutoff_date,
-        "prediction_horizon_days": cfg.prediction_horizon_days,
-        "churn_inactivity_days": cfg.churn_inactivity_days,
-        "churn_probability": y_train_prob,
-        "model_used": best_model_name,
-    })
+    scored = pd.DataFrame(
+        {
+            "customer_id": train_frame["customer_id"].astype("int64"),
+            "cutoff_date": cfg.cutoff_date,
+            "prediction_horizon_days": cfg.prediction_horizon_days,
+            "churn_inactivity_days": cfg.churn_inactivity_days,
+            "churn_probability": y_train_prob,
+            "model_used": best_model_name,
+        }
+    )
     scored["risk_band"] = assign_risk_band(scored["churn_probability"]).astype("string")
 
     return model, metrics, scored, feature_importance, comparison_df
@@ -966,24 +1113,27 @@ def write_outputs(
     LOGGER.info("Model comparison → '%s'", str(comparison_path))
 
 
-def _log_to_mlflow(cfg: ChurnConfig, metrics: Dict[str, float]) -> None:
+def _log_to_mlflow(cfg: ChurnConfig, metrics: dict[str, float]) -> None:
     if not _MLFLOW_AVAILABLE:
         return
     try:
         mlflow.set_experiment(cfg.mlflow_experiment)
         with mlflow.start_run():
-            mlflow.log_params({
-                "cutoff_date": str(cfg.cutoff_date.date()),
-                "prediction_horizon_days": cfg.prediction_horizon_days,
-                "churn_inactivity_days": cfg.churn_inactivity_days,
-                "eval_gap_days": cfg.eval_gap_days,
-                "model_type": cfg.model_type,
-                "best_model": metrics.get("best_model", "unknown"),
-                "random_state": cfg.random_state,
-                "cv_folds": cfg.cv_folds,
-            })
-            mlflow.log_metrics({k: v for k, v in metrics.items()
-                                if isinstance(v, float) and not np.isnan(v)})
+            mlflow.log_params(
+                {
+                    "cutoff_date": str(cfg.cutoff_date.date()),
+                    "prediction_horizon_days": cfg.prediction_horizon_days,
+                    "churn_inactivity_days": cfg.churn_inactivity_days,
+                    "eval_gap_days": cfg.eval_gap_days,
+                    "model_type": cfg.model_type,
+                    "best_model": metrics.get("best_model", "unknown"),
+                    "random_state": cfg.random_state,
+                    "cv_folds": cfg.cv_folds,
+                }
+            )
+            mlflow.log_metrics(
+                {k: v for k, v in metrics.items() if isinstance(v, float) and not np.isnan(v)}
+            )
             if cfg.output_scores_path.exists():
                 mlflow.log_artifact(str(cfg.output_scores_path))
             if cfg.output_model_path.exists():
@@ -1032,11 +1182,14 @@ def run(cfg: ChurnConfig) -> None:
     inv = aggregate_to_invoice_level(txn)
 
     model, metrics, scores, feature_importance, comparison_df = train_and_evaluate(
-        inv=inv, features=features, cfg=cfg,
+        inv=inv,
+        features=features,
+        cfg=cfg,
     )
 
-    LOGGER.info("Holdout metrics: %s", {k: round(v, 4) for k, v in metrics.items()
-                                         if isinstance(v, float)})
+    LOGGER.info(
+        "Holdout metrics: %s", {k: round(v, 4) for k, v in metrics.items() if isinstance(v, float)}
+    )
     LOGGER.info("Top features:\n%s", feature_importance.head(5).to_string(index=False))
 
     write_outputs(

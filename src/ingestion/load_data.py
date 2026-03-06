@@ -20,13 +20,11 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Sequence, Tuple
 
 import pandas as pd
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -34,13 +32,14 @@ LOGGER = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class IngestionConfig:
     """Configuration for the ingestion pipeline."""
+
     input_path: Path
     output_path: Path
-    sheet_names: Tuple[str, str]
+    sheet_names: tuple[str, str]
     log_level: str
 
 
-EXPECTED_INPUT_COLUMNS: Tuple[str, ...] = (
+EXPECTED_INPUT_COLUMNS: tuple[str, ...] = (
     "Invoice",
     "StockCode",
     "Description",
@@ -51,7 +50,7 @@ EXPECTED_INPUT_COLUMNS: Tuple[str, ...] = (
     "Country",
 )
 
-COLUMN_RENAME_MAP: Dict[str, str] = {
+COLUMN_RENAME_MAP: dict[str, str] = {
     "Invoice": "invoice",
     "StockCode": "stock_code",
     "Description": "description",
@@ -62,7 +61,7 @@ COLUMN_RENAME_MAP: Dict[str, str] = {
     "Country": "country",
 }
 
-STANDARD_COLUMN_ORDER: Tuple[str, ...] = (
+STANDARD_COLUMN_ORDER: tuple[str, ...] = (
     "invoice",
     "stock_code",
     "description",
@@ -263,7 +262,7 @@ def standardize_dataframe(df: pd.DataFrame, sheet_name: str) -> pd.DataFrame:
     return out
 
 
-def basic_profile(df: pd.DataFrame) -> Dict[str, float]:
+def basic_profile(df: pd.DataFrame) -> dict[str, float]:
     """
     Compute ingestion-time data quality indicators.
 

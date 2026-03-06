@@ -28,8 +28,6 @@ import argparse
 import subprocess
 import sys
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, Any
 
 from src.utils.config_loader import load_configs
 
@@ -71,8 +69,12 @@ def parse_args() -> PipelineArgs:
         optional ``budget`` override.
     """
     p = argparse.ArgumentParser(description="Run weekly CLV pipeline end-to-end (config-driven).")
-    p.add_argument("--config-dir", type=str, default="config", help="Directory containing YAML config files.")
-    p.add_argument("--budget", type=float, default=None, help="Override total_budget from business.yaml")
+    p.add_argument(
+        "--config-dir", type=str, default="config", help="Directory containing YAML config files."
+    )
+    p.add_argument(
+        "--budget", type=float, default=None, help="Override total_budget from business.yaml"
+    )
     args = p.parse_args()
     return PipelineArgs(config_dir=args.config_dir, budget=args.budget)
 
@@ -119,112 +121,204 @@ def main() -> None:
     prediction_horizon_days = int(modeling["churn_model"]["prediction_horizon_days"])
     churn_model_type = str(modeling["churn_model"].get("model_type", "logistic"))
 
-    total_budget = float(args.budget) if args.budget is not None else float(business["budget"]["total_budget"])
+    total_budget = (
+        float(args.budget) if args.budget is not None else float(business["budget"]["total_budget"])
+    )
     unit_cost = float(business["budget"]["unit_cost_per_customer"])
     retention_effectiveness = float(business["retention"]["assumed_effectiveness"])
     min_clv = float(business["eligibility"]["min_clv"])
     solver = str(business["solver"].get("type", "pulp"))
 
     # Ingestion
-    run([
-        sys.executable, "-m", "src.ingestion.load_data",
-        "--input-path", project["paths"]["input_excel"],
-        "--output-path", project["paths"]["interim_raw"],
-    ])
+    run(
+        [
+            sys.executable,
+            "-m",
+            "src.ingestion.load_data",
+            "--input-path",
+            project["paths"]["input_excel"],
+            "--output-path",
+            project["paths"]["interim_raw"],
+        ]
+    )
 
     # Cleaning
-    run([
-        sys.executable, "-m", "src.cleaning.clean_transactions",
-        "--input-path", project["paths"]["interim_raw"],
-        "--output-path", project["paths"]["interim_clean"],
-    ])
+    run(
+        [
+            sys.executable,
+            "-m",
+            "src.cleaning.clean_transactions",
+            "--input-path",
+            project["paths"]["interim_raw"],
+            "--output-path",
+            project["paths"]["interim_clean"],
+        ]
+    )
 
     # Features
-    run([
-        sys.executable, "-m", "src.features.build_features",
-        "--input-path", project["paths"]["interim_clean"],
-        "--output-path", project["paths"]["features"],
-        "--cutoff-date", cutoff_date,
-    ])
+    run(
+        [
+            sys.executable,
+            "-m",
+            "src.features.build_features",
+            "--input-path",
+            project["paths"]["interim_clean"],
+            "--output-path",
+            project["paths"]["features"],
+            "--cutoff-date",
+            cutoff_date,
+        ]
+    )
 
     # CLV
-    run([
-        sys.executable, "-m", "src.modeling.train_clv_models",
-        "--transactions-path", project["paths"]["interim_clean"],
-        "--output-path", project["paths"]["clv_scores"],
-        "--cutoff-date", cutoff_date,
-        "--holdout-days", str(holdout_days),
-        "--clv-horizon-days", str(clv_horizon_days),
-        "--discount-rate-annual", str(modeling["clv_model"]["discount_rate_annual"]),
-        "--penalizer-bgnbd", str(modeling["clv_model"]["penalizer_bgnbd"]),
-        "--penalizer-gg", str(modeling["clv_model"]["penalizer_gg"]),
-    ])
+    run(
+        [
+            sys.executable,
+            "-m",
+            "src.modeling.train_clv_models",
+            "--transactions-path",
+            project["paths"]["interim_clean"],
+            "--output-path",
+            project["paths"]["clv_scores"],
+            "--cutoff-date",
+            cutoff_date,
+            "--holdout-days",
+            str(holdout_days),
+            "--clv-horizon-days",
+            str(clv_horizon_days),
+            "--discount-rate-annual",
+            str(modeling["clv_model"]["discount_rate_annual"]),
+            "--penalizer-bgnbd",
+            str(modeling["clv_model"]["penalizer_bgnbd"]),
+            "--penalizer-gg",
+            str(modeling["clv_model"]["penalizer_gg"]),
+        ]
+    )
 
     # Churn
-    run([
-        sys.executable, "-m", "src.modeling.train_churn_risk",
-        "--transactions-path", project["paths"]["interim_clean"],
-        "--features-path", project["paths"]["features"],
-        "--output-scores-path", project["paths"]["churn_scores"],
-        "--output-model-path", project["paths"]["churn_model"],
-        "--cutoff-date", cutoff_date,
-        "--prediction-horizon-days", str(prediction_horizon_days),
-        "--churn-inactivity-days", str(churn_inactivity_days),
-        "--eval-gap-days", str(int(modeling["churn_model"].get("eval_gap_days", 60))),
-        "--model-type", churn_model_type,
-    ])
+    run(
+        [
+            sys.executable,
+            "-m",
+            "src.modeling.train_churn_risk",
+            "--transactions-path",
+            project["paths"]["interim_clean"],
+            "--features-path",
+            project["paths"]["features"],
+            "--output-scores-path",
+            project["paths"]["churn_scores"],
+            "--output-model-path",
+            project["paths"]["churn_model"],
+            "--cutoff-date",
+            cutoff_date,
+            "--prediction-horizon-days",
+            str(prediction_horizon_days),
+            "--churn-inactivity-days",
+            str(churn_inactivity_days),
+            "--eval-gap-days",
+            str(int(modeling["churn_model"].get("eval_gap_days", 60))),
+            "--model-type",
+            churn_model_type,
+        ]
+    )
 
     # Budget allocation
-    run([
-        sys.executable, "-m", "src.optimization.budget_allocator",
-        "--clv-path", project["paths"]["clv_scores"],
-        "--risk-path", project["paths"]["churn_scores"],
-        "--output-path", project["paths"]["targeting_list"],
-        "--budget", str(total_budget),
-        "--unit-cost", str(unit_cost),
-        "--retention-effectiveness", str(retention_effectiveness),
-        "--min-clv", str(min_clv),
-        "--solver", solver,
-    ])
+    run(
+        [
+            sys.executable,
+            "-m",
+            "src.optimization.budget_allocator",
+            "--clv-path",
+            project["paths"]["clv_scores"],
+            "--risk-path",
+            project["paths"]["churn_scores"],
+            "--output-path",
+            project["paths"]["targeting_list"],
+            "--budget",
+            str(total_budget),
+            "--unit-cost",
+            str(unit_cost),
+            "--retention-effectiveness",
+            str(retention_effectiveness),
+            "--min-clv",
+            str(min_clv),
+            "--solver",
+            solver,
+        ]
+    )
 
     # Evaluation / reporting
-    run([
-        sys.executable, "-m", "src.evaluation.backtesting",
-        "--cutoff-date", cutoff_date,
-        "--holdout-days", str(holdout_days),
-        "--retention-effectiveness", str(retention_effectiveness),
-    ])
+    run(
+        [
+            sys.executable,
+            "-m",
+            "src.evaluation.backtesting",
+            "--cutoff-date",
+            cutoff_date,
+            "--holdout-days",
+            str(holdout_days),
+            "--retention-effectiveness",
+            str(retention_effectiveness),
+        ]
+    )
 
     # Customer segmentation (RFM + CLV + churn overlay)
-    run([
-        sys.executable, "-m", "src.analysis.customer_segmentation",
-        "--features-path", project["paths"]["features"],
-        "--clv-path", project["paths"]["clv_scores"],
-        "--churn-path", project["paths"]["churn_scores"],
-        "--output-path", project["paths"].get("customer_segments", "data/processed/customer_segments.parquet"),
-    ])
+    run(
+        [
+            sys.executable,
+            "-m",
+            "src.analysis.customer_segmentation",
+            "--features-path",
+            project["paths"]["features"],
+            "--clv-path",
+            project["paths"]["clv_scores"],
+            "--churn-path",
+            project["paths"]["churn_scores"],
+            "--output-path",
+            project["paths"].get("customer_segments", "data/processed/customer_segments.parquet"),
+        ]
+    )
 
     # Cohort analysis
-    run([
-        sys.executable, "-m", "src.analysis.cohort_analysis",
-        "--transactions-path", project["paths"]["interim_clean"],
-    ])
+    run(
+        [
+            sys.executable,
+            "-m",
+            "src.analysis.cohort_analysis",
+            "--transactions-path",
+            project["paths"]["interim_clean"],
+        ]
+    )
 
     # Business insights (Pareto, revenue concentration, monthly trend)
-    run([
-        sys.executable, "-m", "src.analysis.business_insights",
-        "--transactions-path", project["paths"]["interim_clean"],
-        "--features-path", project["paths"]["features"],
-    ])
+    run(
+        [
+            sys.executable,
+            "-m",
+            "src.analysis.business_insights",
+            "--transactions-path",
+            project["paths"]["interim_clean"],
+            "--features-path",
+            project["paths"]["features"],
+        ]
+    )
 
     # Sensitivity analysis (Monte Carlo ROI)
-    run([
-        sys.executable, "-m", "src.evaluation.sensitivity_analysis",
-        "--clv-path", project["paths"]["clv_scores"],
-        "--churn-path", project["paths"]["churn_scores"],
-        "--base-effectiveness", str(retention_effectiveness),
-        "--base-unit-cost", str(unit_cost),
-    ])
+    run(
+        [
+            sys.executable,
+            "-m",
+            "src.evaluation.sensitivity_analysis",
+            "--clv-path",
+            project["paths"]["clv_scores"],
+            "--churn-path",
+            project["paths"]["churn_scores"],
+            "--base-effectiveness",
+            str(retention_effectiveness),
+            "--base-unit-cost",
+            str(unit_cost),
+        ]
+    )
 
 
 if __name__ == "__main__":

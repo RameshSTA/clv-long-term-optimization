@@ -14,12 +14,12 @@ actionable messages rather than cryptic downstream failures.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 
 
-def load_yaml(path: str | Path) -> Dict[str, Any]:
+def load_yaml(path: str | Path) -> dict[str, Any]:
     """
     Load a YAML config file from disk.
 
@@ -56,7 +56,7 @@ def load_yaml(path: str | Path) -> Dict[str, Any]:
     return data
 
 
-def load_configs(config_dir: str | Path) -> Dict[str, Dict[str, Any]]:
+def load_configs(config_dir: str | Path) -> dict[str, dict[str, Any]]:
     """
     Load the project's standard config set.
 

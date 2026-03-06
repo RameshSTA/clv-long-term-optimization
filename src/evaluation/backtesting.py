@@ -31,13 +31,11 @@ import argparse
 import logging
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
 
-import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
-
+import numpy as np
+import pandas as pd
 
 LOGGER = logging.getLogger(__name__)
 
@@ -95,7 +93,9 @@ def parse_args() -> EvalConfig:
         A frozen :class:`EvalConfig` dataclass with all parameters resolved
         to their correct Python types.
     """
-    parser = argparse.ArgumentParser(description="Evaluate CLV and targeting policy; generate reports.")
+    parser = argparse.ArgumentParser(
+        description="Evaluate CLV and targeting policy; generate reports."
+    )
     parser.add_argument(
         "--transactions-path",
         type=str,
@@ -202,12 +202,9 @@ def compute_holdout_actuals(
     mask = (inv["invoice_dt"] >= cutoff) & (inv["invoice_dt"] <= end)
     holdout = inv.loc[mask].copy()
 
-    actuals = (
-        holdout.groupby("customer_id", as_index=False)
-        .agg(
-            holdout_transactions=("invoice", "nunique"),
-            holdout_revenue=("revenue", "sum"),
-        )
+    actuals = holdout.groupby("customer_id", as_index=False).agg(
+        holdout_transactions=("invoice", "nunique"),
+        holdout_revenue=("revenue", "sum"),
     )
     return actuals
 
@@ -280,7 +277,7 @@ def bootstrap_decile_ci(
     work["decile"] = (pd.qcut(work["_rank"], 10, labels=False) + 1).astype(int)
 
     # Bootstrap: resample rows, keep decile assignments from full dataset.
-    boot_means: Dict[int, List[float]] = {d: [] for d in range(1, 11)}
+    boot_means: dict[int, list[float]] = {d: [] for d in range(1, 11)}
     for _ in range(n_bootstrap):
         sample_idx = rng.integers(0, n, size=n)
         sample = work.iloc[sample_idx]
@@ -355,7 +352,9 @@ def clv_decile_lift_table(
 
     # Lift relative to overall mean revenue
     overall_mean = float(work[revenue_col].mean())
-    table["lift_vs_overall_mean"] = table["avg_holdout_revenue"] / overall_mean if overall_mean > 0 else np.nan
+    table["lift_vs_overall_mean"] = (
+        table["avg_holdout_revenue"] / overall_mean if overall_mean > 0 else np.nan
+    )
 
     # Bootstrap confidence intervals
     ci_df = bootstrap_decile_ci(
@@ -386,8 +385,14 @@ def plot_decile_lift(table: pd.DataFrame, out_path: str) -> None:
     """
     fig, ax = plt.subplots(figsize=(9, 5))
 
-    ax.plot(table["decile"], table["avg_holdout_revenue"], marker="o", color="#2563EB",
-            linewidth=2, label="Avg Holdout Revenue")
+    ax.plot(
+        table["decile"],
+        table["avg_holdout_revenue"],
+        marker="o",
+        color="#2563EB",
+        linewidth=2,
+        label="Avg Holdout Revenue",
+    )
 
     if "ci_lower" in table.columns and "ci_upper" in table.columns:
         ax.fill_between(
@@ -399,12 +404,21 @@ def plot_decile_lift(table: pd.DataFrame, out_path: str) -> None:
             label="95% Bootstrap CI",
         )
 
-    ax.axhline(table["avg_holdout_revenue"].mean(), color="#6B7280", linestyle="--",
-               linewidth=1, label="Population Mean")
+    ax.axhline(
+        table["avg_holdout_revenue"].mean(),
+        color="#6B7280",
+        linestyle="--",
+        linewidth=1,
+        label="Population Mean",
+    )
 
     ax.set_xlabel("Predicted CLV Decile (1=Lowest, 10=Highest)", fontsize=11)
     ax.set_ylabel("Average Holdout Revenue (£)", fontsize=11)
-    ax.set_title("CLV Model Validation: Holdout Revenue by Predicted CLV Decile", fontsize=12, fontweight="bold")
+    ax.set_title(
+        "CLV Model Validation: Holdout Revenue by Predicted CLV Decile",
+        fontsize=12,
+        fontweight="bold",
+    )
     ax.xaxis.set_major_locator(mticker.MultipleLocator(1))
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"£{x:,.0f}"))
     ax.legend(framealpha=0.9)
@@ -455,7 +469,7 @@ def build_policy_frame(
 
 def roi_curve(
     policy_df: pd.DataFrame,
-    budgets: List[float],
+    budgets: list[float],
 ) -> pd.DataFrame:
     """
     Compute ROI and totals under varying budgets using greedy selection on net_gain.
@@ -518,7 +532,9 @@ def plot_roi_curve(curve_df: pd.DataFrame, out_path: str) -> None:
     fig, ax1 = plt.subplots(figsize=(9, 5))
 
     color_roi = "#2563EB"
-    ax1.plot(curve_df["budget"], curve_df["roi"], marker="o", color=color_roi, linewidth=2, label="ROI")
+    ax1.plot(
+        curve_df["budget"], curve_df["roi"], marker="o", color=color_roi, linewidth=2, label="ROI"
+    )
     ax1.set_xlabel("Retention Budget (£)", fontsize=11)
     ax1.set_ylabel("Return on Investment (×)", fontsize=11, color=color_roi)
     ax1.tick_params(axis="y", labelcolor=color_roi)
@@ -527,8 +543,15 @@ def plot_roi_curve(curve_df: pd.DataFrame, out_path: str) -> None:
 
     ax2 = ax1.twinx()
     color_benefit = "#16A34A"
-    ax2.plot(curve_df["budget"], curve_df["total_expected_benefit"], marker="s", color=color_benefit,
-             linewidth=2, linestyle="--", label="Expected Benefit")
+    ax2.plot(
+        curve_df["budget"],
+        curve_df["total_expected_benefit"],
+        marker="s",
+        color=color_benefit,
+        linewidth=2,
+        linestyle="--",
+        label="Expected Benefit",
+    )
     ax2.set_ylabel("Total Expected Benefit (£)", fontsize=11, color=color_benefit)
     ax2.tick_params(axis="y", labelcolor=color_benefit)
     ax2.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"£{x:,.0f}"))
@@ -537,8 +560,11 @@ def plot_roi_curve(curve_df: pd.DataFrame, out_path: str) -> None:
     lines2, labels2 = ax2.get_legend_handles_labels()
     ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper right", framealpha=0.9)
 
-    ax1.set_title("Policy Simulation: ROI and Expected Benefit vs Retention Budget",
-                  fontsize=12, fontweight="bold")
+    ax1.set_title(
+        "Policy Simulation: ROI and Expected Benefit vs Retention Budget",
+        fontsize=12,
+        fontweight="bold",
+    )
     ax1.grid(axis="y", alpha=0.3)
     fig.tight_layout()
     fig.savefig(out_path, dpi=200)
@@ -562,13 +588,20 @@ def plot_targeted_vs_budget(curve_df: pd.DataFrame, out_path: str) -> None:
     fig, ax = plt.subplots(figsize=(9, 5))
 
     ax.fill_between(curve_df["budget"], curve_df["customers_targeted"], alpha=0.15, color="#7C3AED")
-    ax.plot(curve_df["budget"], curve_df["customers_targeted"], marker="o", color="#7C3AED",
-            linewidth=2, label="Customers Targeted")
+    ax.plot(
+        curve_df["budget"],
+        curve_df["customers_targeted"],
+        marker="o",
+        color="#7C3AED",
+        linewidth=2,
+        label="Customers Targeted",
+    )
 
     ax.set_xlabel("Retention Budget (£)", fontsize=11)
     ax.set_ylabel("Customers Targeted", fontsize=11)
-    ax.set_title("Policy Simulation: Customers Targeted vs Retention Budget",
-                 fontsize=12, fontweight="bold")
+    ax.set_title(
+        "Policy Simulation: Customers Targeted vs Retention Budget", fontsize=12, fontweight="bold"
+    )
     ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"£{x:,.0f}"))
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{x:,.0f}"))
     ax.grid(axis="y", alpha=0.3)

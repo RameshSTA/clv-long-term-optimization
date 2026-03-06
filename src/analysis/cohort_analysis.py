@@ -28,8 +28,8 @@ from __future__ import annotations
 
 import argparse
 import logging
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
@@ -65,10 +65,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(description="Monthly cohort retention analysis.")
     parser.add_argument("--transactions-path", default="data/interim/transactions_clean.parquet")
-    parser.add_argument("--max-cohort-months", type=int, default=12,
-                        help="Maximum number of months to track after acquisition.")
-    parser.add_argument("--min-cohort-size", type=int, default=10,
-                        help="Minimum customers in a cohort to include in analysis.")
+    parser.add_argument(
+        "--max-cohort-months",
+        type=int,
+        default=12,
+        help="Maximum number of months to track after acquisition.",
+    )
+    parser.add_argument(
+        "--min-cohort-size",
+        type=int,
+        default=10,
+        help="Minimum customers in a cohort to include in analysis.",
+    )
     parser.add_argument("--log-level", default="INFO")
     return parser.parse_args(argv)
 
@@ -113,9 +121,7 @@ def compute_retention_matrix(
 
     # Cohort sizes (number of unique customers per acquisition cohort)
     cohort_sizes = (
-        cohort_frame.groupby("cohort_month")["customer_id"]
-        .nunique()
-        .rename("cohort_size")
+        cohort_frame.groupby("cohort_month")["customer_id"].nunique().rename("cohort_size")
     )
 
     # Filter small cohorts
@@ -202,12 +208,14 @@ def plot_cohort_heatmap(retention: pd.DataFrame, output_path: Path) -> None:
     ax.set_ylabel("Acquisition Cohort (Month)", fontsize=11)
     ax.set_title(
         "Monthly Cohort Retention Rates\n(% of acquisition cohort who purchased in each month)",
-        fontsize=12, fontweight="bold",
+        fontsize=12,
+        fontweight="bold",
     )
 
     # Highlight acquisition month column
-    ax.add_patch(plt.Rectangle((0, 0), 1, len(plot_data),
-                                fill=False, edgecolor="blue", linewidth=2))
+    ax.add_patch(
+        plt.Rectangle((0, 0), 1, len(plot_data), fill=False, edgecolor="blue", linewidth=2)
+    )
 
     fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -267,16 +275,25 @@ def plot_retention_curves(retention: pd.DataFrame, output_path: Path) -> None:
         values = row.dropna()
         if len(values) < 2:
             continue
-        ax.plot(values.index, values.values, "o-", color=cmap(i + 2),
-                linewidth=1.5, markersize=4, alpha=0.8, label=str(cohort))
+        ax.plot(
+            values.index,
+            values.values,
+            "o-",
+            color=cmap(i + 2),
+            linewidth=1.5,
+            markersize=4,
+            alpha=0.8,
+            label=str(cohort),
+        )
 
     ax.set_xlabel("Months Since First Purchase", fontsize=11)
     ax.set_ylabel("% of Cohort Active", fontsize=11)
     ax.set_title("Cohort Retention Curves", fontsize=12, fontweight="bold")
     ax.set_ylim(0, 105)
     ax.grid(alpha=0.3)
-    ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=7, title="Cohort",
-              framealpha=0.9)
+    ax.legend(
+        bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=7, title="Cohort", framealpha=0.9
+    )
 
     fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -296,8 +313,9 @@ def run(args: argparse.Namespace | None = None) -> None:
 
     LOGGER.info("Loading transactions from '%s'...", str(txn_path))
     txn = pd.read_parquet(txn_path)
-    LOGGER.info("Transactions: %d rows, %d unique customers",
-                len(txn), txn["customer_id"].nunique())
+    LOGGER.info(
+        "Transactions: %d rows, %d unique customers", len(txn), txn["customer_id"].nunique()
+    )
 
     LOGGER.info("Computing cohort retention matrix (max %d months)...", args.max_cohort_months)
     retention = compute_retention_matrix(

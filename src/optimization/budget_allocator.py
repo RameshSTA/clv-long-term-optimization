@@ -51,9 +51,9 @@ from __future__ import annotations
 
 import argparse
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Sequence
 
 import numpy as np
 import pandas as pd
@@ -70,6 +70,7 @@ LOGGER = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class BudgetConfig:
     """Configuration for budget allocation."""
+
     clv_path: Path
     risk_path: Path
     output_path: Path
@@ -135,7 +136,9 @@ def parse_args(argv: Sequence[str] | None = None) -> BudgetConfig:
     BudgetConfig
         Parsed configuration.
     """
-    parser = argparse.ArgumentParser(description="Allocate retention budget based on CLV and churn risk.")
+    parser = argparse.ArgumentParser(
+        description="Allocate retention budget based on CLV and churn risk."
+    )
     parser.add_argument(
         "--clv-path",
         type=str,
@@ -243,7 +246,7 @@ def _assert_columns_present(df: pd.DataFrame, required: set[str], name: str) -> 
     name:
         Friendly name used in error messages.
     """
-    missing = sorted(list(required - set(df.columns)))
+    missing = sorted(required - set(df.columns))
     if missing:
         raise ValueError(f"{name} missing required columns: {missing}. Found: {list(df.columns)}")
 
@@ -372,8 +375,12 @@ def solve_knapsack_pulp(df: pd.DataFrame, budget: float) -> pd.Series:
 
     x = {idx: pulp.LpVariable(f"x_{idx}", cat="Binary") for idx in candidates.index}
 
-    prob += pulp.lpSum([x[idx] * float(candidates.loc[idx, "net_gain"]) for idx in candidates.index])
-    prob += pulp.lpSum([x[idx] * float(candidates.loc[idx, "cost"]) for idx in candidates.index]) <= float(budget)
+    prob += pulp.lpSum(
+        [x[idx] * float(candidates.loc[idx, "net_gain"]) for idx in candidates.index]
+    )
+    prob += pulp.lpSum(
+        [x[idx] * float(candidates.loc[idx, "cost"]) for idx in candidates.index]
+    ) <= float(budget)
 
     status = prob.solve(pulp.PULP_CBC_CMD(msg=False))
     if pulp.LpStatus[status] != "Optimal":
@@ -420,7 +427,7 @@ def solve_greedy(df: pd.DataFrame, budget: float) -> pd.Series:
     return selected
 
 
-def summarize_allocation(df: pd.DataFrame) -> Dict[str, float]:
+def summarize_allocation(df: pd.DataFrame) -> dict[str, float]:
     """
     Compute summary metrics for the chosen targeting policy.
 
@@ -441,9 +448,13 @@ def summarize_allocation(df: pd.DataFrame) -> Dict[str, float]:
         "customers_eligible": float(df["eligible"].sum()),
         "customers_targeted": float(len(targeted)),
         "total_cost": float(targeted["cost"].sum()) if len(targeted) else 0.0,
-        "total_expected_benefit": float(targeted["expected_benefit"].sum()) if len(targeted) else 0.0,
+        "total_expected_benefit": float(targeted["expected_benefit"].sum())
+        if len(targeted)
+        else 0.0,
         "total_net_gain": float(targeted["net_gain"].sum()) if len(targeted) else 0.0,
-        "avg_churn_probability_targeted": float(targeted["churn_probability"].mean()) if len(targeted) else 0.0,
+        "avg_churn_probability_targeted": float(targeted["churn_probability"].mean())
+        if len(targeted)
+        else 0.0,
         "avg_clv_targeted": float(targeted["clv_horizon"].mean()) if len(targeted) else 0.0,
     }
 
@@ -480,7 +491,9 @@ def run(cfg: BudgetConfig) -> None:
     # Priority ranking among targeted customers by net_gain descending
     economics["priority_rank"] = 0
     economics.loc[economics["target"], "priority_rank"] = (
-        economics.loc[economics["target"], "net_gain"].rank(method="first", ascending=False).astype(int)
+        economics.loc[economics["target"], "net_gain"]
+        .rank(method="first", ascending=False)
+        .astype(int)
     )
 
     economics["recommended_action"] = np.where(economics["target"], "target", "no_action")

@@ -36,8 +36,8 @@ from __future__ import annotations
 
 import argparse
 import logging
+from collections.abc import Sequence
 from pathlib import Path
-from typing import List, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
@@ -75,16 +75,24 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Monte Carlo sensitivity analysis on ROI.")
     parser.add_argument("--clv-path", default="data/processed/customer_clv_scores.parquet")
     parser.add_argument("--churn-path", default="data/processed/customer_churn_risk_scores.parquet")
-    parser.add_argument("--n-simulations", type=int, default=1000,
-                        help="Number of Monte Carlo draws.")
-    parser.add_argument("--n-budget-points", type=int, default=12,
-                        help="Number of budget levels to evaluate.")
-    parser.add_argument("--base-effectiveness", type=float, default=0.10,
-                        help="Central retention effectiveness assumption.")
-    parser.add_argument("--base-unit-cost", type=float, default=2.0,
-                        help="Central unit cost per customer (£).")
-    parser.add_argument("--reference-budget", type=float, default=2000.0,
-                        help="Reference budget for tornado chart.")
+    parser.add_argument(
+        "--n-simulations", type=int, default=1000, help="Number of Monte Carlo draws."
+    )
+    parser.add_argument(
+        "--n-budget-points", type=int, default=12, help="Number of budget levels to evaluate."
+    )
+    parser.add_argument(
+        "--base-effectiveness",
+        type=float,
+        default=0.10,
+        help="Central retention effectiveness assumption.",
+    )
+    parser.add_argument(
+        "--base-unit-cost", type=float, default=2.0, help="Central unit cost per customer (£)."
+    )
+    parser.add_argument(
+        "--reference-budget", type=float, default=2000.0, help="Reference budget for tornado chart."
+    )
     parser.add_argument("--random-state", type=int, default=42)
     parser.add_argument("--log-level", default="INFO")
     return parser.parse_args(argv)
@@ -96,7 +104,7 @@ def _compute_roi_at_budget(
     effectiveness: float,
     unit_cost: float,
     budget: float,
-) -> Tuple[float, float, int]:
+) -> tuple[float, float, int]:
     """
     Greedy knapsack allocation at a single budget level.
 
@@ -139,8 +147,8 @@ def monte_carlo_simulation(
     churn_prob: np.ndarray,
     budget_levels: np.ndarray,
     n_simulations: int,
-    effectiveness_range: Tuple[float, float],
-    cost_range: Tuple[float, float],
+    effectiveness_range: tuple[float, float],
+    cost_range: tuple[float, float],
     random_state: int = 42,
 ) -> pd.DataFrame:
     """
@@ -170,15 +178,17 @@ def monte_carlo_simulation(
     for b_idx, budget in enumerate(budget_levels):
         roi_col = roi_matrix[:, b_idx]
         net_col = net_matrix[:, b_idx]
-        rows.append({
-            "budget": float(budget),
-            "roi_p5": float(np.percentile(roi_col, 5)),
-            "roi_p50": float(np.percentile(roi_col, 50)),
-            "roi_p95": float(np.percentile(roi_col, 95)),
-            "net_gain_p5": float(np.percentile(net_col, 5)),
-            "net_gain_p50": float(np.percentile(net_col, 50)),
-            "net_gain_p95": float(np.percentile(net_col, 95)),
-        })
+        rows.append(
+            {
+                "budget": float(budget),
+                "roi_p5": float(np.percentile(roi_col, 5)),
+                "roi_p50": float(np.percentile(roi_col, 50)),
+                "roi_p95": float(np.percentile(roi_col, 95)),
+                "net_gain_p5": float(np.percentile(net_col, 5)),
+                "net_gain_p50": float(np.percentile(net_col, 50)),
+                "net_gain_p95": float(np.percentile(net_col, 95)),
+            }
+        )
 
     return pd.DataFrame(rows)
 
@@ -202,7 +212,8 @@ def tornado_sensitivity(
     }
 
     base_roi, _, _ = _compute_roi_at_budget(
-        clv, churn_prob,
+        clv,
+        churn_prob,
         params["retention_effectiveness"],
         params["unit_cost"],
         reference_budget,
@@ -217,28 +228,36 @@ def tornado_sensitivity(
             low_val = max(low_val, 0.1)
 
         roi_low, _, _ = _compute_roi_at_budget(
-            clv, churn_prob,
-            low_val if param_name == "retention_effectiveness" else params["retention_effectiveness"],
+            clv,
+            churn_prob,
+            low_val
+            if param_name == "retention_effectiveness"
+            else params["retention_effectiveness"],
             low_val if param_name == "unit_cost" else params["unit_cost"],
             reference_budget,
         )
         roi_high, _, _ = _compute_roi_at_budget(
-            clv, churn_prob,
-            high_val if param_name == "retention_effectiveness" else params["retention_effectiveness"],
+            clv,
+            churn_prob,
+            high_val
+            if param_name == "retention_effectiveness"
+            else params["retention_effectiveness"],
             high_val if param_name == "unit_cost" else params["unit_cost"],
             reference_budget,
         )
 
-        rows.append({
-            "parameter": param_name,
-            "base_value": base_val,
-            "low_value": low_val,
-            "high_value": high_val,
-            "roi_at_base": base_roi,
-            "roi_at_low": roi_low,
-            "roi_at_high": roi_high,
-            "roi_swing": abs(roi_high - roi_low),
-        })
+        rows.append(
+            {
+                "parameter": param_name,
+                "base_value": base_val,
+                "low_value": low_val,
+                "high_value": high_val,
+                "roi_at_base": base_roi,
+                "roi_at_low": roi_low,
+                "roi_at_high": roi_high,
+                "roi_swing": abs(roi_high - roi_low),
+            }
+        )
 
     return pd.DataFrame(rows).sort_values("roi_swing", ascending=True)
 
@@ -250,22 +269,35 @@ def plot_monte_carlo_roi(mc_df: pd.DataFrame, base_df: pd.DataFrame, output_path
     # Panel 1: ROI bands
     ax = axes[0]
     budgets = mc_df["budget"].values
-    ax.fill_between(budgets, mc_df["roi_p5"], mc_df["roi_p95"],
-                    alpha=0.2, color="#1565C0", label="5th–95th percentile (uncertainty)")
-    ax.fill_between(budgets, mc_df["roi_p5"], mc_df["roi_p50"],
-                    alpha=0.3, color="#1565C0")
-    ax.plot(budgets, mc_df["roi_p50"], color="#1565C0", linewidth=2.5,
-            label="Median ROI")
+    ax.fill_between(
+        budgets,
+        mc_df["roi_p5"],
+        mc_df["roi_p95"],
+        alpha=0.2,
+        color="#1565C0",
+        label="5th–95th percentile (uncertainty)",
+    )
+    ax.fill_between(budgets, mc_df["roi_p5"], mc_df["roi_p50"], alpha=0.3, color="#1565C0")
+    ax.plot(budgets, mc_df["roi_p50"], color="#1565C0", linewidth=2.5, label="Median ROI")
 
     if base_df is not None and len(base_df) > 0:
-        ax.plot(base_df["budget"], base_df["roi"], color="#E53935", linewidth=1.5,
-                linestyle="--", label="Baseline (central assumptions)")
+        ax.plot(
+            base_df["budget"],
+            base_df["roi"],
+            color="#E53935",
+            linewidth=1.5,
+            linestyle="--",
+            label="Baseline (central assumptions)",
+        )
 
     ax.set_xlabel("Retention Budget (£)", fontsize=11)
     ax.set_ylabel("Return on Investment (×)", fontsize=11)
-    ax.set_title("ROI vs Budget — Monte Carlo Uncertainty\n"
-                 "(retention_effectiveness ~ Uniform(5%–25%), cost ~ Uniform(£1–£5))",
-                 fontsize=10, fontweight="bold")
+    ax.set_title(
+        "ROI vs Budget — Monte Carlo Uncertainty\n"
+        "(retention_effectiveness ~ Uniform(5%–25%), cost ~ Uniform(£1–£5))",
+        fontsize=10,
+        fontweight="bold",
+    )
     ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"£{v:,.0f}"))
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.0f}×"))
     ax.legend(fontsize=9)
@@ -273,10 +305,21 @@ def plot_monte_carlo_roi(mc_df: pd.DataFrame, base_df: pd.DataFrame, output_path
 
     # Panel 2: Net gain bands
     ax2 = axes[1]
-    ax2.fill_between(budgets, mc_df["net_gain_p5"] / 1000, mc_df["net_gain_p95"] / 1000,
-                     alpha=0.2, color="#43A047", label="5th–95th percentile")
-    ax2.plot(budgets, mc_df["net_gain_p50"] / 1000, color="#43A047", linewidth=2.5,
-             label="Median net gain")
+    ax2.fill_between(
+        budgets,
+        mc_df["net_gain_p5"] / 1000,
+        mc_df["net_gain_p95"] / 1000,
+        alpha=0.2,
+        color="#43A047",
+        label="5th–95th percentile",
+    )
+    ax2.plot(
+        budgets,
+        mc_df["net_gain_p50"] / 1000,
+        color="#43A047",
+        linewidth=2.5,
+        label="Median net gain",
+    )
     ax2.set_xlabel("Retention Budget (£)", fontsize=11)
     ax2.set_ylabel("Expected Net Gain (£ thousands)", fontsize=11)
     ax2.set_title("Net Gain vs Budget — Uncertainty Bands", fontsize=11, fontweight="bold")
@@ -285,8 +328,11 @@ def plot_monte_carlo_roi(mc_df: pd.DataFrame, base_df: pd.DataFrame, output_path
     ax2.legend(fontsize=9)
     ax2.grid(alpha=0.3)
 
-    fig.suptitle("Monte Carlo Sensitivity Analysis — Retention ROI Under Assumption Uncertainty",
-                 fontsize=12, fontweight="bold")
+    fig.suptitle(
+        "Monte Carlo Sensitivity Analysis — Retention ROI Under Assumption Uncertainty",
+        fontsize=12,
+        fontweight="bold",
+    )
     fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=150, bbox_inches="tight")
@@ -299,16 +345,30 @@ def plot_tornado(tornado_df: pd.DataFrame, reference_budget: float, output_path:
     fig, ax = plt.subplots(figsize=(9, max(4, len(tornado_df) * 1.5)))
 
     base_roi = tornado_df.iloc[-1]["roi_at_base"]  # last row has largest swing
-    param_labels = [p.replace("_", " ").title() for p in tornado_df["parameter"]]
+    [p.replace("_", " ").title() for p in tornado_df["parameter"]]
 
     for i, (_, row) in enumerate(tornado_df.iterrows()):
         low_delta = row["roi_at_low"] - row["roi_at_base"]
         high_delta = row["roi_at_high"] - row["roi_at_base"]
 
-        ax.barh(i, high_delta, left=0, color="#1565C0", alpha=0.75, height=0.5,
-                label="Parameter +50%" if i == 0 else "")
-        ax.barh(i, low_delta, left=0, color="#C62828", alpha=0.75, height=0.5,
-                label="Parameter −50%" if i == 0 else "")
+        ax.barh(
+            i,
+            high_delta,
+            left=0,
+            color="#1565C0",
+            alpha=0.75,
+            height=0.5,
+            label="Parameter +50%" if i == 0 else "",
+        )
+        ax.barh(
+            i,
+            low_delta,
+            left=0,
+            color="#C62828",
+            alpha=0.75,
+            height=0.5,
+            label="Parameter −50%" if i == 0 else "",
+        )
 
     ax.axvline(0, color="black", linewidth=1.5)
     ax.set_yticks(range(len(tornado_df)))
@@ -317,15 +377,23 @@ def plot_tornado(tornado_df: pd.DataFrame, reference_budget: float, output_path:
     ax.set_title(
         f"Sensitivity Tornado Chart\nROI impact of ±50% parameter variation "
         f"at £{reference_budget:,.0f} budget",
-        fontsize=11, fontweight="bold",
+        fontsize=11,
+        fontweight="bold",
     )
     ax.legend(fontsize=9)
     ax.grid(axis="x", alpha=0.3)
 
     # Base ROI annotation
-    ax.text(0.98, 0.02, f"Baseline ROI: {base_roi:.1f}×",
-            transform=ax.transAxes, fontsize=10, ha="right", va="bottom",
-            bbox=dict(boxstyle="round", facecolor="lightyellow", alpha=0.8))
+    ax.text(
+        0.98,
+        0.02,
+        f"Baseline ROI: {base_roi:.1f}×",
+        transform=ax.transAxes,
+        fontsize=10,
+        ha="right",
+        va="bottom",
+        bbox={"boxstyle": "round", "facecolor": "lightyellow", "alpha": 0.8},
+    )
 
     fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -363,8 +431,11 @@ def run(args: argparse.Namespace | None = None) -> None:
         args.n_budget_points,
     )
 
-    LOGGER.info("Running Monte Carlo simulation: %d draws × %d budget levels...",
-                args.n_simulations, args.n_budget_points)
+    LOGGER.info(
+        "Running Monte Carlo simulation: %d draws × %d budget levels...",
+        args.n_simulations,
+        args.n_budget_points,
+    )
     mc_df = monte_carlo_simulation(
         clv=clv_arr,
         churn_prob=churn_arr,
@@ -379,8 +450,11 @@ def run(args: argparse.Namespace | None = None) -> None:
     base_rows = []
     for budget in budget_levels:
         roi, net, n = _compute_roi_at_budget(
-            clv_arr, churn_arr,
-            args.base_effectiveness, args.base_unit_cost, budget,
+            clv_arr,
+            churn_arr,
+            args.base_effectiveness,
+            args.base_unit_cost,
+            budget,
         )
         base_rows.append({"budget": budget, "roi": roi, "net_gain": net, "n_targeted": n})
     base_df = pd.DataFrame(base_rows)
@@ -394,7 +468,8 @@ def run(args: argparse.Namespace | None = None) -> None:
     # Tornado analysis
     base_params = {"effectiveness": args.base_effectiveness, "unit_cost": args.base_unit_cost}
     tornado_df = tornado_sensitivity(
-        clv=clv_arr, churn_prob=churn_arr,
+        clv=clv_arr,
+        churn_prob=churn_arr,
         reference_budget=args.reference_budget,
         base_params=base_params,
         variation=0.5,
@@ -402,9 +477,13 @@ def run(args: argparse.Namespace | None = None) -> None:
     tornado_path = Path("reports/tables/sensitivity_tornado.csv")
     tornado_df.to_csv(tornado_path, index=False)
 
-    LOGGER.info("Tornado analysis at £%.0f budget:\n%s",
-                args.reference_budget,
-                tornado_df[["parameter", "roi_at_low", "roi_at_base", "roi_at_high"]].to_string(index=False))
+    LOGGER.info(
+        "Tornado analysis at £%.0f budget:\n%s",
+        args.reference_budget,
+        tornado_df[["parameter", "roi_at_low", "roi_at_base", "roi_at_high"]].to_string(
+            index=False
+        ),
+    )
 
     # Plots
     plot_monte_carlo_roi(mc_df, base_df, Path("reports/figures/roi_monte_carlo.png"))

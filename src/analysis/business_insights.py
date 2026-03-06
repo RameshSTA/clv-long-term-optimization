@@ -34,8 +34,8 @@ from __future__ import annotations
 
 import argparse
 import logging
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
@@ -132,12 +132,18 @@ def plot_revenue_concentration(pareto_stats: dict, output_path: Path) -> None:
     ax = axes[0]
     ax.plot([0, 100], [0, 100], "k--", linewidth=1.2, alpha=0.6, label="Perfect equality")
     ax.plot(x, y, color="#1565C0", linewidth=2.5, label=f"Revenue Lorenz curve (Gini={gini:.3f})")
-    ax.fill_between(x, y, [xi for xi in x], alpha=0.2, color="#1565C0")
+    ax.fill_between(x, y, list(x), alpha=0.2, color="#1565C0")
 
     # 80% revenue line
     ax.axhline(80, color="#E53935", linestyle="--", linewidth=1, alpha=0.7)
-    ax.axvline(pct_cust, color="#E53935", linestyle="--", linewidth=1, alpha=0.7,
-               label=f"{pct_cust:.0f}% of customers → 80% of revenue")
+    ax.axvline(
+        pct_cust,
+        color="#E53935",
+        linestyle="--",
+        linewidth=1,
+        alpha=0.7,
+        label=f"{pct_cust:.0f}% of customers → 80% of revenue",
+    )
     ax.scatter([pct_cust], [80], color="#E53935", s=80, zorder=5)
 
     ax.set_xlabel("Cumulative % of Customers (sorted by revenue)", fontsize=11)
@@ -160,17 +166,26 @@ def plot_revenue_concentration(pareto_stats: dict, output_path: Path) -> None:
     colors = ["#90CAF9", "#42A5F5", "#1E88E5", "#1565C0"]
     bars = ax2.bar(percentile_labels, percentile_revs, color=colors, edgecolor="white")
     for bar, val in zip(bars, percentile_revs):
-        ax2.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5,
-                 f"{val:.1f}%", ha="center", va="bottom", fontsize=10, fontweight="bold")
+        ax2.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.5,
+            f"{val:.1f}%",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+            fontweight="bold",
+        )
 
     ax2.set_ylabel("% of Total Revenue", fontsize=11)
     ax2.set_title("Revenue Share by Customer Percentile", fontsize=11, fontweight="bold")
     ax2.grid(axis="y", alpha=0.3)
     ax2.set_ylim(0, max(percentile_revs) * 1.2)
 
-    text = (f"Gini = {gini:.3f}  |  "
-            f"Top 10% → {pct_rev_top10:.0f}% of revenue  |  "
-            f"{pct_cust:.0f}% of customers → 80% of revenue")
+    text = (
+        f"Gini = {gini:.3f}  |  "
+        f"Top 10% → {pct_rev_top10:.0f}% of revenue  |  "
+        f"{pct_cust:.0f}% of customers → 80% of revenue"
+    )
     fig.suptitle(f"Revenue Concentration Analysis\n{text}", fontsize=12, fontweight="bold")
     fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -191,12 +206,22 @@ def plot_monthly_revenue(txn: pd.DataFrame, output_path: Path) -> None:
 
     # Revenue
     ax = axes[0]
-    ax.fill_between(monthly["month_ts"], monthly["revenue"] / 1000,
-                    alpha=0.3, color="#1565C0")
-    ax.plot(monthly["month_ts"], monthly["revenue"] / 1000,
-            color="#1565C0", linewidth=1.5, label="Monthly revenue")
-    ax.plot(monthly["month_ts"], monthly["revenue_3m_ma"] / 1000,
-            color="#C62828", linewidth=2.5, linestyle="--", label="3-month moving avg")
+    ax.fill_between(monthly["month_ts"], monthly["revenue"] / 1000, alpha=0.3, color="#1565C0")
+    ax.plot(
+        monthly["month_ts"],
+        monthly["revenue"] / 1000,
+        color="#1565C0",
+        linewidth=1.5,
+        label="Monthly revenue",
+    )
+    ax.plot(
+        monthly["month_ts"],
+        monthly["revenue_3m_ma"] / 1000,
+        color="#C62828",
+        linewidth=2.5,
+        linestyle="--",
+        label="3-month moving avg",
+    )
     ax.set_ylabel("Revenue (£ thousands)", fontsize=10)
     ax.set_title("Monthly Revenue Trend", fontsize=11, fontweight="bold")
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"£{v:,.0f}k"))
@@ -208,16 +233,25 @@ def plot_monthly_revenue(txn: pd.DataFrame, output_path: Path) -> None:
     monthly_customers["month_ts"] = monthly_customers["month"].dt.to_timestamp()
 
     ax2 = axes[1]
-    ax2.bar(monthly_customers["month_ts"], monthly_customers["customer_id"],
-            width=20, color="#43A047", alpha=0.7, label="Active customers")
+    ax2.bar(
+        monthly_customers["month_ts"],
+        monthly_customers["customer_id"],
+        width=20,
+        color="#43A047",
+        alpha=0.7,
+        label="Active customers",
+    )
     ax2.set_ylabel("Unique Active Customers", fontsize=10)
     ax2.set_xlabel("Month", fontsize=10)
     ax2.set_title("Monthly Active Customers", fontsize=11, fontweight="bold")
     ax2.grid(alpha=0.3)
     ax2.legend(fontsize=9)
 
-    fig.suptitle("Business Performance — Monthly Revenue and Customer Activity",
-                 fontsize=13, fontweight="bold")
+    fig.suptitle(
+        "Business Performance — Monthly Revenue and Customer Activity",
+        fontsize=13,
+        fontweight="bold",
+    )
     fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=150, bbox_inches="tight")
@@ -234,10 +268,20 @@ def plot_customer_value_distribution(features: pd.DataFrame, output_path: Path) 
     # Linear scale
     ax = axes[0]
     ax.hist(rev, bins=50, color="#1565C0", edgecolor="white", alpha=0.8)
-    ax.axvline(rev.mean(), color="#E53935", linestyle="--", linewidth=1.5,
-               label=f"Mean = £{rev.mean():,.0f}")
-    ax.axvline(rev.median(), color="#FF8F00", linestyle="--", linewidth=1.5,
-               label=f"Median = £{rev.median():,.0f}")
+    ax.axvline(
+        rev.mean(),
+        color="#E53935",
+        linestyle="--",
+        linewidth=1.5,
+        label=f"Mean = £{rev.mean():,.0f}",
+    )
+    ax.axvline(
+        rev.median(),
+        color="#FF8F00",
+        linestyle="--",
+        linewidth=1.5,
+        label=f"Median = £{rev.median():,.0f}",
+    )
     ax.set_xlabel("Total Revenue per Customer (£)", fontsize=10)
     ax.set_ylabel("Number of Customers", fontsize=10)
     ax.set_title("Customer Revenue Distribution (Linear)", fontsize=11, fontweight="bold")
@@ -251,21 +295,33 @@ def plot_customer_value_distribution(features: pd.DataFrame, output_path: Path) 
     ax2.hist(log_rev, bins=50, color="#C62828", edgecolor="white", alpha=0.8)
     ax2.set_xlabel("log₁₀(Total Revenue per Customer) [£]", fontsize=10)
     ax2.set_ylabel("Number of Customers", fontsize=10)
-    ax2.set_title("Customer Revenue Distribution (Log Scale)\nReveals the long tail",
-                  fontsize=11, fontweight="bold")
+    ax2.set_title(
+        "Customer Revenue Distribution (Log Scale)\nReveals the long tail",
+        fontsize=11,
+        fontweight="bold",
+    )
     ax2.grid(alpha=0.3)
 
     p90 = rev.quantile(0.90)
     p99 = rev.quantile(0.99)
     pct_gt_1000 = (rev > 1000).mean() * 100
-    stats_text = (f"Top 10%: ≥ £{p90:,.0f}\n"
-                  f"Top 1%: ≥ £{p99:,.0f}\n"
-                  f"Customers > £1k: {pct_gt_1000:.1f}%")
-    ax2.text(0.97, 0.95, stats_text, transform=ax2.transAxes, fontsize=9,
-             va="top", ha="right", bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
+    stats_text = (
+        f"Top 10%: ≥ £{p90:,.0f}\nTop 1%: ≥ £{p99:,.0f}\nCustomers > £1k: {pct_gt_1000:.1f}%"
+    )
+    ax2.text(
+        0.97,
+        0.95,
+        stats_text,
+        transform=ax2.transAxes,
+        fontsize=9,
+        va="top",
+        ha="right",
+        bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.8},
+    )
 
-    fig.suptitle("Customer Lifetime Revenue Distribution — Heavy-Tailed",
-                 fontsize=13, fontweight="bold")
+    fig.suptitle(
+        "Customer Lifetime Revenue Distribution — Heavy-Tailed", fontsize=13, fontweight="bold"
+    )
     fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=150, bbox_inches="tight")
@@ -278,7 +334,7 @@ def run(args: argparse.Namespace | None = None) -> None:
         args = parse_args()
     setup_logging(args.log_level)
 
-    for p, label in [(args.transactions_path, "transactions"), (args.features_path, "features")]:
+    for p, _label in [(args.transactions_path, "transactions"), (args.features_path, "features")]:
         if not Path(p).exists():
             raise FileNotFoundError(f"Required input missing: {p}. Run the pipeline first.")
 
@@ -297,36 +353,48 @@ def run(args: argparse.Namespace | None = None) -> None:
     )
 
     # Save summary table
-    summary_df = pd.DataFrame([{
-        "metric": "pct_customers_for_80pct_revenue",
-        "value": pareto_stats["pct_customers_for_80pct_revenue"],
-        "interpretation": "% of customers who generate 80% of total revenue",
-    }, {
-        "metric": "pct_revenue_top_10pct_customers",
-        "value": pareto_stats["pct_revenue_top_10pct_customers"],
-        "interpretation": "% of revenue generated by the top 10% of customers",
-    }, {
-        "metric": "gini_coefficient",
-        "value": pareto_stats["gini_coefficient"],
-        "interpretation": "Revenue inequality (0=equal, 1=fully concentrated)",
-    }, {
-        "metric": "n_customers",
-        "value": pareto_stats["n_customers"],
-        "interpretation": "Total unique customers analyzed",
-    }, {
-        "metric": "total_revenue_gbp",
-        "value": round(pareto_stats["total_revenue"], 2),
-        "interpretation": "Total revenue across all customers",
-    }])
+    summary_df = pd.DataFrame(
+        [
+            {
+                "metric": "pct_customers_for_80pct_revenue",
+                "value": pareto_stats["pct_customers_for_80pct_revenue"],
+                "interpretation": "% of customers who generate 80% of total revenue",
+            },
+            {
+                "metric": "pct_revenue_top_10pct_customers",
+                "value": pareto_stats["pct_revenue_top_10pct_customers"],
+                "interpretation": "% of revenue generated by the top 10% of customers",
+            },
+            {
+                "metric": "gini_coefficient",
+                "value": pareto_stats["gini_coefficient"],
+                "interpretation": "Revenue inequality (0=equal, 1=fully concentrated)",
+            },
+            {
+                "metric": "n_customers",
+                "value": pareto_stats["n_customers"],
+                "interpretation": "Total unique customers analyzed",
+            },
+            {
+                "metric": "total_revenue_gbp",
+                "value": round(pareto_stats["total_revenue"], 2),
+                "interpretation": "Total revenue across all customers",
+            },
+        ]
+    )
     pareto_path = Path("reports/tables/pareto_summary.csv")
     pareto_path.parent.mkdir(parents=True, exist_ok=True)
     summary_df.to_csv(pareto_path, index=False)
     LOGGER.info("Pareto summary → '%s'", str(pareto_path))
 
     # Figures
-    plot_revenue_concentration(pareto_stats, Path("reports/figures/revenue_concentration_curve.png"))
+    plot_revenue_concentration(
+        pareto_stats, Path("reports/figures/revenue_concentration_curve.png")
+    )
     plot_monthly_revenue(txn, Path("reports/figures/monthly_revenue_trend.png"))
-    plot_customer_value_distribution(features, Path("reports/figures/customer_value_distribution.png"))
+    plot_customer_value_distribution(
+        features, Path("reports/figures/customer_value_distribution.png")
+    )
 
     LOGGER.info("Business insights complete.")
 

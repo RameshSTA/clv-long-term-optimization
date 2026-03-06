@@ -36,8 +36,8 @@ from __future__ import annotations
 
 import argparse
 import logging
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
@@ -101,7 +101,7 @@ def compute_rfm_scores(features: pd.DataFrame) -> pd.DataFrame:
     M: higher total_revenue is better.
     """
     df = features[["customer_id", "recency_days", "n_invoices", "total_revenue"]].copy()
-    df["R"] = _quartile_rank(df["recency_days"], ascending=False)   # lower recency = better
+    df["R"] = _quartile_rank(df["recency_days"], ascending=False)  # lower recency = better
     df["F"] = _quartile_rank(df["n_invoices"], ascending=True)
     df["M"] = _quartile_rank(df["total_revenue"], ascending=True)
     df["rfm_score"] = df["R"] + df["F"] + df["M"]
@@ -114,7 +114,7 @@ def assign_segment(row: pd.Series) -> str:
 
     Priority rules are applied top-down; first match wins.
     """
-    R, F, M = int(row["R"]), int(row["F"]), int(row["M"])
+    R, F, _M = int(row["R"]), int(row["F"]), int(row["M"])
 
     if R == 4 and F == 4:
         return "Champions"
@@ -146,14 +146,14 @@ SEGMENT_ORDER = [
 ]
 
 SEGMENT_COLORS = {
-    "Champions":           "#1565C0",
-    "Loyal Customers":     "#1E88E5",
+    "Champions": "#1565C0",
+    "Loyal Customers": "#1E88E5",
     "Potential Loyalists": "#42A5F5",
-    "New Customers":       "#80D8FF",
-    "At Risk":             "#FF8F00",
-    "Cant Lose Them":      "#E65100",
-    "Hibernating":         "#78909C",
-    "Lost":                "#37474F",
+    "New Customers": "#80D8FF",
+    "At Risk": "#FF8F00",
+    "Cant Lose Them": "#E65100",
+    "Hibernating": "#78909C",
+    "Lost": "#37474F",
 }
 
 
@@ -209,11 +209,18 @@ def plot_segment_heatmap(df: pd.DataFrame, output_path: Path) -> None:
     seg_data = summary.set_index("segment").reindex(segs)
 
     colors = [SEGMENT_COLORS.get(s, "#90A4AE") for s in segs]
-    bars = ax.bar(x, seg_data["avg_clv"].values, color=colors, edgecolor="white", linewidth=0.5)
+    ax.bar(x, seg_data["avg_clv"].values, color=colors, edgecolor="white", linewidth=0.5)
 
     ax2 = ax.twinx()
-    ax2.plot(x, seg_data["avg_churn_prob"].values * 100, "o--", color="#E53935",
-             linewidth=2, markersize=7, label="Avg churn prob (%)")
+    ax2.plot(
+        x,
+        seg_data["avg_churn_prob"].values * 100,
+        "o--",
+        color="#E53935",
+        linewidth=2,
+        markersize=7,
+        label="Avg churn prob (%)",
+    )
     ax2.set_ylabel("Avg Churn Probability (%)", fontsize=10, color="#E53935")
     ax2.tick_params(axis="y", labelcolor="#E53935")
     ax2.set_ylim(0, 100)
@@ -230,12 +237,23 @@ def plot_segment_heatmap(df: pd.DataFrame, output_path: Path) -> None:
     ax3 = axes[1]
     width = 0.4
     x2 = np.arange(len(segs))
-    ax3.bar(x2 - width / 2, seg_data["n_customers"].values, width=width,
-            color=colors, edgecolor="white", label="# Customers")
+    ax3.bar(
+        x2 - width / 2,
+        seg_data["n_customers"].values,
+        width=width,
+        color=colors,
+        edgecolor="white",
+        label="# Customers",
+    )
     ax4 = ax3.twinx()
-    ax4.bar(x2 + width / 2, seg_data["pct_revenue"].values, width=width,
-            color=[c + "99" for c in [SEGMENT_COLORS.get(s, "#90A4AE") for s in segs]],
-            edgecolor="white", label="% Revenue")
+    ax4.bar(
+        x2 + width / 2,
+        seg_data["pct_revenue"].values,
+        width=width,
+        color=[c + "99" for c in [SEGMENT_COLORS.get(s, "#90A4AE") for s in segs]],
+        edgecolor="white",
+        label="% Revenue",
+    )
     ax4.set_ylabel("% Total Revenue", fontsize=10)
 
     ax3.set_xticks(x2)
@@ -277,15 +295,26 @@ def plot_rfm_scatter(df: pd.DataFrame, output_path: Path) -> None:
     # Annotation quadrants
     ax.axhline(df["clv_score"].median(), color="gray", linestyle="--", alpha=0.5, linewidth=0.8)
     ax.axvline(0.5, color="gray", linestyle="--", alpha=0.5, linewidth=0.8)
-    ax.text(0.02, ax.get_ylim()[1] * 0.97, "Low churn risk\nHigh CLV → Retain",
-            fontsize=8, color="green", va="top")
-    ax.text(0.75, ax.get_ylim()[1] * 0.97, "High churn risk\nHigh CLV → Priority target",
-            fontsize=8, color="red", va="top")
+    ax.text(
+        0.02,
+        ax.get_ylim()[1] * 0.97,
+        "Low churn risk\nHigh CLV → Retain",
+        fontsize=8,
+        color="green",
+        va="top",
+    )
+    ax.text(
+        0.75,
+        ax.get_ylim()[1] * 0.97,
+        "High churn risk\nHigh CLV → Priority target",
+        fontsize=8,
+        color="red",
+        va="top",
+    )
 
     ax.set_xlabel("Churn Probability", fontsize=11)
     ax.set_ylabel("CLV Score (£)", fontsize=11)
-    ax.set_title("Customer Segments: CLV vs Churn Risk",
-                 fontsize=12, fontweight="bold")
+    ax.set_title("Customer Segments: CLV vs Churn Risk", fontsize=12, fontweight="bold")
     ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left", fontsize=8, framealpha=0.9)
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"£{v:,.0f}"))
     ax.grid(alpha=0.3)
@@ -302,7 +331,7 @@ def run(args: argparse.Namespace | None = None) -> None:
         args = parse_args()
     setup_logging(args.log_level)
 
-    for p, name in [
+    for p, _name in [
         (args.features_path, "customer_features"),
         (args.clv_path, "customer_clv_scores"),
         (args.churn_path, "customer_churn_risk_scores"),
@@ -329,8 +358,12 @@ def run(args: argparse.Namespace | None = None) -> None:
     summary.to_csv(summary_path, index=False)
     LOGGER.info("Segment summary → '%s'", str(summary_path))
 
-    LOGGER.info("Segment distribution:\n%s", summary[["segment", "n_customers",
-                "pct_customers", "avg_clv", "avg_churn_prob"]].to_string(index=False))
+    LOGGER.info(
+        "Segment distribution:\n%s",
+        summary[["segment", "n_customers", "pct_customers", "avg_clv", "avg_churn_prob"]].to_string(
+            index=False
+        ),
+    )
 
     plot_segment_heatmap(segments, Path("reports/figures/segment_clv_churn_heatmap.png"))
     plot_rfm_scatter(segments, Path("reports/figures/segment_rfm_scatter.png"))

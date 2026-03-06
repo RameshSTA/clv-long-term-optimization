@@ -25,12 +25,11 @@ from __future__ import annotations
 
 import argparse
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Sequence
 
 import pandas as pd
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -38,6 +37,7 @@ LOGGER = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class CleaningConfig:
     """Configuration for the cleaning pipeline."""
+
     input_path: Path
     output_path: Path
     log_level: str
@@ -156,7 +156,7 @@ def assert_required_schema(df: pd.DataFrame) -> None:
         )
 
 
-def profile_dataset(df: pd.DataFrame) -> Dict[str, float]:
+def profile_dataset(df: pd.DataFrame) -> dict[str, float]:
     """
     Compute key quality indicators for a transaction dataset.
 
@@ -266,7 +266,7 @@ def clean_transactions(df: pd.DataFrame) -> pd.DataFrame:
     return cleaned.reset_index(drop=True)
 
 
-def cleaning_impact(before: pd.DataFrame, after: pd.DataFrame) -> Dict[str, float]:
+def cleaning_impact(before: pd.DataFrame, after: pd.DataFrame) -> dict[str, float]:
     """
     Compute before/after cleaning impact summary.
 
@@ -293,7 +293,9 @@ def cleaning_impact(before: pd.DataFrame, after: pd.DataFrame) -> Dict[str, floa
         "pct_removed": float(removed / max(rows_before, 1)),
         "customers_before": float(before["customer_id"].nunique(dropna=True)),
         "customers_after": float(after["customer_id"].nunique(dropna=True)),
-        "revenue_after_sum": float(after["revenue"].sum()) if "revenue" in after.columns else float("nan"),
+        "revenue_after_sum": float(after["revenue"].sum())
+        if "revenue" in after.columns
+        else float("nan"),
     }
 
 
@@ -332,8 +334,7 @@ def run(cfg: CleaningConfig) -> None:
 
     if not cfg.input_path.exists():
         raise FileNotFoundError(
-            f"Input file not found: {cfg.input_path}. "
-            "Run Step 1 ingestion first."
+            f"Input file not found: {cfg.input_path}. Run Step 1 ingestion first."
         )
 
     LOGGER.info("Reading standardized raw transactions from '%s'", str(cfg.input_path))

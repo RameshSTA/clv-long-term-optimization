@@ -8,18 +8,18 @@ Design notes
 - Tests are scoped to pure-function behavior (no I/O, no file system).
 - Time-safe labeling is validated explicitly (cutoff boundary respected).
 """
+
 from __future__ import annotations
 
 import pandas as pd
-import numpy as np
 
-from src.modeling.train_clv_models import (
-    aggregate_to_invoice_level,
-    annual_to_daily_discount_rate,
-)
 from src.modeling.train_churn_risk import (
     build_snapshot,
     compute_churn_labels,
+)
+from src.modeling.train_clv_models import (
+    aggregate_to_invoice_level,
+    annual_to_daily_discount_rate,
 )
 
 

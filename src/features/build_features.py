@@ -23,12 +23,11 @@ from __future__ import annotations
 
 import argparse
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Sequence
 
 import pandas as pd
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +35,7 @@ LOGGER = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class FeatureConfig:
     """Configuration for customer feature generation."""
+
     input_path: Path
     output_path: Path
     cutoff_date: pd.Timestamp
@@ -217,8 +217,7 @@ def build_customer_features(transactions: pd.DataFrame, cutoff: pd.Timestamp) ->
     df = transactions.loc[transactions["invoice_dt"] < cutoff].copy()
     if df.empty:
         raise ValueError(
-            "No transactions found before cutoff date. "
-            "Check cutoff_date or input data."
+            "No transactions found before cutoff date. Check cutoff_date or input data."
         )
 
     min_dt = df["invoice_dt"].min()
@@ -245,7 +244,9 @@ def build_customer_features(transactions: pd.DataFrame, cutoff: pd.Timestamp) ->
     )
 
     # Average order value (AOV). Guard against divide-by-zero (should not happen for valid customers).
-    features["avg_order_value"] = features["total_revenue"] / features["n_invoices"].replace(0, pd.NA)
+    features["avg_order_value"] = features["total_revenue"] / features["n_invoices"].replace(
+        0, pd.NA
+    )
 
     # Trailing revenue windows (these may be missing for customers with no purchases in the window).
     rev_30 = _sum_revenue_in_window(df, cutoff=cutoff, window_days=30)
@@ -280,7 +281,7 @@ def build_customer_features(transactions: pd.DataFrame, cutoff: pd.Timestamp) ->
     return features.reset_index()
 
 
-def profile_features(df: pd.DataFrame) -> Dict[str, float]:
+def profile_features(df: pd.DataFrame) -> dict[str, float]:
     """
     Compute lightweight profiling metrics for the customer feature table.
 
@@ -339,8 +340,7 @@ def run(cfg: FeatureConfig) -> None:
 
     if not cfg.input_path.exists():
         raise FileNotFoundError(
-            f"Input file not found: {cfg.input_path}. "
-            "Run Step 2 cleaning first."
+            f"Input file not found: {cfg.input_path}. Run Step 2 cleaning first."
         )
 
     LOGGER.info("Reading cleaned transactions from '%s'", str(cfg.input_path))

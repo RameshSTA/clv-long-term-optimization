@@ -75,6 +75,8 @@ select = [
 ignore = [
     "E501",  # line-too-long (handled by formatter)
     "B008",  # do not perform function calls in default arguments
+    "N803",  # argument name should be lowercase — X is standard ML convention (scikit-learn API)
+    "N806",  # variable in function should be lowercase — X_train, X_test, X_df are ML convention
 ]
 
 [tool.ruff.lint.per-file-ignores]

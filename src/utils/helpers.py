@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Union
 
 
 def setup_logging(level: str) -> None:
@@ -38,8 +37,7 @@ def setup_logging(level: str) -> None:
     numeric_level = getattr(logging, level.upper(), None)
     if not isinstance(numeric_level, int):
         raise ValueError(
-            f"Invalid log level '{level}'. "
-            "Expected one of: DEBUG, INFO, WARNING, ERROR."
+            f"Invalid log level '{level}'. Expected one of: DEBUG, INFO, WARNING, ERROR."
         )
 
     logging.basicConfig(
@@ -48,7 +46,7 @@ def setup_logging(level: str) -> None:
     )
 
 
-def ensure_parent_dir(path: Union[str, Path]) -> None:
+def ensure_parent_dir(path: str | Path) -> None:
     """
     Ensure that the parent directory for a file path exists.
 

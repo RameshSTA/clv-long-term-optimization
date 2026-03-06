@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Sequence, Tuple
@@ -36,6 +37,12 @@ import numpy as np
 import pandas as pd
 from lifetimes import BetaGeoFitter, GammaGammaFitter
 from lifetimes.utils import calibration_and_holdout_data
+
+try:
+    import mlflow
+    _MLFLOW_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _MLFLOW_AVAILABLE = False
 
 
 LOGGER = logging.getLogger(__name__)
@@ -52,6 +59,7 @@ class CLVConfig:
     discount_rate_annual: float
     penalizer_coef_bgnbd: float
     penalizer_coef_gg: float
+    mlflow_experiment: str
     log_level: str
 
 
@@ -158,6 +166,12 @@ def parse_args(argv: Sequence[str] | None = None) -> CLVConfig:
         help="Penalizer coefficient for Gamma-Gamma fitter.",
     )
     parser.add_argument(
+        "--mlflow-experiment",
+        type=str,
+        default="clv_models",
+        help="MLflow experiment name for run tracking.",
+    )
+    parser.add_argument(
         "--log-level",
         type=str,
         default="INFO",
@@ -174,6 +188,7 @@ def parse_args(argv: Sequence[str] | None = None) -> CLVConfig:
         discount_rate_annual=args.discount_rate_annual,
         penalizer_coef_bgnbd=args.penalizer_bgnbd,
         penalizer_coef_gg=args.penalizer_gg,
+        mlflow_experiment=args.mlflow_experiment,
         log_level=args.log_level,
     )
 
@@ -545,6 +560,33 @@ def score_customers(
     return scores
 
 
+def spearman_rank_corr(x: pd.Series, y: pd.Series) -> float:
+    """
+    Compute Spearman rank correlation between two Series.
+
+    Returns NaN if either Series lacks variability.
+
+    Parameters
+    ----------
+    x:
+        First numeric Series.
+    y:
+        Second numeric Series (same length as x).
+
+    Returns
+    -------
+    float
+        Spearman rank correlation coefficient in [-1, 1].
+    """
+    if x.nunique() <= 1 or y.nunique() <= 1:
+        return float("nan")
+    rx = x.rank(method="average")
+    ry = y.rank(method="average")
+    cov = ((rx - rx.mean()) * (ry - ry.mean())).mean()
+    std = rx.std(ddof=0) * ry.std(ddof=0)
+    return float(cov / std) if std != 0.0 else float("nan")
+
+
 def build_decile_evaluation(eval_df: pd.DataFrame) -> pd.DataFrame:
     """
     Build a decile-level evaluation table for stakeholder interpretability.
@@ -577,9 +619,72 @@ def build_decile_evaluation(eval_df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def _log_clv_to_mlflow(
+    cfg: CLVConfig,
+    txn_metrics: Dict[str, float],
+    spearman_corr: float,
+    deciles: pd.DataFrame,
+) -> None:
+    """
+    Log CLV model parameters, metrics, and artifacts to MLflow.
+
+    Parameters
+    ----------
+    cfg:
+        CLVConfig for the current run.
+    txn_metrics:
+        Holdout transaction prediction metrics (MAE, RMSE, MAPE).
+    spearman_corr:
+        Spearman rank correlation between predicted CLV and holdout revenue.
+    deciles:
+        Decile lift table.
+    """
+    if not _MLFLOW_AVAILABLE:
+        LOGGER.debug("MLflow not available; skipping experiment tracking.")
+        return
+
+    try:
+        mlflow.set_experiment(cfg.mlflow_experiment)
+        with mlflow.start_run():
+            mlflow.log_params(
+                {
+                    "cutoff_date": str(cfg.cutoff_date.date()),
+                    "holdout_days": cfg.holdout_days,
+                    "clv_horizon_days": cfg.clv_horizon_days,
+                    "discount_rate_annual": cfg.discount_rate_annual,
+                    "penalizer_coef_bgnbd": cfg.penalizer_coef_bgnbd,
+                    "penalizer_coef_gg": cfg.penalizer_coef_gg,
+                }
+            )
+            mlflow.log_metrics(
+                {
+                    "holdout_txn_mae": txn_metrics["mae"],
+                    "holdout_txn_rmse": txn_metrics["rmse"],
+                    "holdout_txn_mape": txn_metrics.get("mape", float("nan")),
+                    "spearman_clv_vs_holdout_revenue": spearman_corr,
+                    "top_decile_avg_holdout_revenue": float(
+                        deciles.loc[deciles["decile"] == deciles["decile"].max(), "avg_holdout_revenue"].iloc[0]
+                    ),
+                }
+            )
+            mlflow.log_artifact(str(cfg.output_path))
+    except Exception as exc:  # pragma: no cover
+        LOGGER.warning("MLflow logging failed (non-fatal): %s", exc)
+
+
 def run(cfg: CLVConfig) -> None:
     """
     Execute CLV model training, time-based evaluation, and scoring.
+
+    Steps
+    -----
+    1. Load cleaned transactions and aggregate to invoice level.
+    2. Build calibration/holdout split using lifetimes conventions.
+    3. Fit BG/NBD (frequency) and Gamma-Gamma (monetary) models.
+    4. Score all customers at the cutoff date.
+    5. Evaluate with holdout transaction prediction metrics + decile lift + Spearman rho.
+    6. Persist CLV scores and decile evaluation table.
+    7. Log parameters and metrics to MLflow.
 
     Parameters
     ----------
@@ -646,10 +751,26 @@ def run(cfg: CLVConfig) -> None:
     deciles = build_decile_evaluation(eval_for_deciles)
     LOGGER.info("Decile evaluation (1=lowest,10=highest):\n%s", deciles.to_string(index=False))
 
+    # Spearman rank correlation: CLV ranking vs actual holdout revenue
+    eval_merged = scores[["customer_id", "clv_horizon"]].merge(
+        actuals[["customer_id", "holdout_revenue"]], on="customer_id", how="left"
+    )
+    eval_merged["holdout_revenue"] = eval_merged["holdout_revenue"].fillna(0.0)
+    spearman_corr = spearman_rank_corr(eval_merged["clv_horizon"], eval_merged["holdout_revenue"])
+    LOGGER.info("CLV ranking quality (Spearman rho vs holdout revenue): %.4f", spearman_corr)
+
     # Persist scores
     ensure_parent_dir(cfg.output_path)
     LOGGER.info("Writing CLV scores to '%s' (rows=%d)", str(cfg.output_path), len(scores))
     scores.to_parquet(cfg.output_path, index=False)
+
+    # Persist decile evaluation table alongside reports
+    decile_path = Path("reports/tables/clv_decile_calibration.csv")
+    ensure_parent_dir(decile_path)
+    deciles.to_csv(decile_path, index=False)
+    LOGGER.info("CLV decile calibration table written to '%s'", str(decile_path))
+
+    _log_clv_to_mlflow(cfg=cfg, txn_metrics=txn_metrics, spearman_corr=spearman_corr, deciles=deciles)
 
     LOGGER.info("Step 4 completed successfully")
 

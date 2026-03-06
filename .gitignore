@@ -1,35 +1,63 @@
-# Python
+# ── Python ─────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
 
-# Virtual environments
+# ── Virtual environments ────────────────────────────────────────────────────────
 .venv/
 venv/
+env/
 
-# OS files
+# ── OS files ────────────────────────────────────────────────────────────────────
 .DS_Store
+Thumbs.db
 
-# Data (keep structure, not data)
+# ── Data — raw and processed data are never committed (too large / private) ─────
 data/raw/*
 data/interim/*
 data/processed/*
+data/external/*
 
-# Allow empty folders
+# Preserve directory structure with .gitkeep placeholders
 !data/raw/.gitkeep
 !data/interim/.gitkeep
 !data/processed/.gitkeep
+!data/external/.gitkeep
 
-# Reports outputs
-reports/figures/*
-reports/tables/*
+# ── MLflow experiment tracking — local run artefacts ───────────────────────────
+mlruns/
+mlartifacts/
 
-# Logs
+# ── Model artefacts ─────────────────────────────────────────────────────────────
+*.joblib
+*.pkl
+*.pt
+*.onnx
+
+# ── Logs ────────────────────────────────────────────────────────────────────────
 logs/
+*.log
 
-# Notebooks checkpoints
+# ── Jupyter ─────────────────────────────────────────────────────────────────────
 .ipynb_checkpoints/
 
-# Joblib / model artifacts
-*.joblib
+# ── IDEs ────────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Coverage ────────────────────────────────────────────────────────────────────
+.coverage
+htmlcov/
+.pytest_cache/
+
+# ── Reports: figures and tables ARE committed so README images render on GitHub ─
+# (Remove these lines only if the files become too large to track in git)
+# reports/figures/*
+# reports/tables/*

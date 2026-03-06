@@ -1,3 +1,16 @@
+# src/utils/config_loader.py
+"""
+YAML configuration loader for the CLV optimization pipeline.
+
+Provides two entry points:
+- ``load_yaml``: Load and validate a single YAML file.
+- ``load_configs``: Load the full standard config set (project, modeling,
+  business, evaluation) as a single dict of dicts.
+
+All functions raise on the earliest detectable error so callers receive
+actionable messages rather than cryptic downstream failures.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path

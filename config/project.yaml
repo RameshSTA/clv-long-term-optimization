@@ -17,7 +17,9 @@ paths:
   features: "data/processed/customer_features.parquet"
   clv_scores: "data/processed/customer_clv_scores.parquet"
   churn_scores: "data/processed/customer_churn_risk_scores.parquet"
+  churn_model: "data/processed/churn_risk_model.joblib"
   targeting_list: "data/processed/targeting_list.parquet"
+  customer_segments: "data/processed/customer_segments.parquet"
 
   reports_figures: "reports/figures"
   reports_tables: "reports/tables"

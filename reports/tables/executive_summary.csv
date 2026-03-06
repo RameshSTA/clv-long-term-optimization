@@ -1,0 +1,2 @@
+cutoff_date,holdout_days,spearman_corr_clv_vs_holdout_revenue,customers_scored_clv,customers_scored_risk,unit_cost_assumed,retention_effectiveness_assumed
+2011-06-01,180,0.5688524722051831,4933.0,4933.0,2.0,0.1

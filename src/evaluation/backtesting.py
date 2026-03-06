@@ -31,11 +31,12 @@ import argparse
 import logging
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 
 
 LOGGER = logging.getLogger(__name__)
@@ -55,7 +56,14 @@ class EvalConfig:
 
 
 def setup_logging(level: str) -> None:
-    """Configure console logging."""
+    """Configure root-level console logging for this script.
+
+    Args:
+        level: A string log level (e.g. ``"INFO"``, ``"DEBUG"``, ``"WARNING"``).
+
+    Raises:
+        ValueError: If ``level`` is not a recognised Python logging level name.
+    """
     numeric_level = getattr(logging, level.upper(), None)
     if not isinstance(numeric_level, int):
         raise ValueError(f"Invalid log level: {level}")
@@ -67,12 +75,26 @@ def setup_logging(level: str) -> None:
 
 
 def ensure_dir(path: str) -> None:
-    """Create a directory if it does not exist."""
+    """Create *path* and all intermediate directories if they do not exist.
+
+    Args:
+        path: Directory path to create.  Existing directories are left
+            untouched (idempotent).
+    """
     os.makedirs(path, exist_ok=True)
 
 
 def parse_args() -> EvalConfig:
-    """Parse CLI args."""
+    """Parse CLI arguments and return a validated :class:`EvalConfig`.
+
+    All arguments have sensible defaults so the script can be invoked without
+    flags. Production runs should supply explicit paths to avoid relying on
+    the working-directory convention.
+
+    Returns:
+        A frozen :class:`EvalConfig` dataclass with all parameters resolved
+        to their correct Python types.
+    """
     parser = argparse.ArgumentParser(description="Evaluate CLV and targeting policy; generate reports.")
     parser.add_argument(
         "--transactions-path",
@@ -207,15 +229,110 @@ def spearman_rank_corr(x: pd.Series, y: pd.Series) -> float:
     return float(cov / std) if std != 0 else float("nan")
 
 
+def bootstrap_decile_ci(
+    df_eval: pd.DataFrame,
+    clv_col: str = "clv_horizon",
+    revenue_col: str = "holdout_revenue",
+    n_bootstrap: int = 500,
+    ci_level: float = 0.95,
+    random_state: int = 42,
+) -> pd.DataFrame:
+    """
+    Compute bootstrap confidence intervals for average holdout revenue per CLV decile.
+
+    Bootstrap procedure:
+    - Resample customers with replacement `n_bootstrap` times.
+    - For each resample, compute average holdout revenue per decile.
+    - Report empirical CI from the percentile method.
+
+    This quantifies the uncertainty in the decile lift chart and is crucial
+    for communicating that the ranking benefit is statistically reliable.
+
+    Parameters
+    ----------
+    df_eval:
+        Evaluation DataFrame with columns clv_col, revenue_col, customer_id.
+    clv_col:
+        Column name for predicted CLV.
+    revenue_col:
+        Column name for actual holdout revenue.
+    n_bootstrap:
+        Number of bootstrap resamples.
+    ci_level:
+        Confidence level (e.g., 0.95 for 95% CI).
+    random_state:
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    pd.DataFrame
+        Decile table with ci_lower and ci_upper columns for avg_holdout_revenue.
+    """
+    rng = np.random.default_rng(random_state)
+    n = len(df_eval)
+    alpha = 1.0 - ci_level
+
+    # Assign deciles on the full dataset using consistent ranks.
+    work = df_eval.copy()
+    work[clv_col] = work[clv_col].fillna(0.0)
+    work[revenue_col] = work[revenue_col].fillna(0.0)
+    work["_rank"] = work[clv_col].rank(method="first")
+    work["decile"] = (pd.qcut(work["_rank"], 10, labels=False) + 1).astype(int)
+
+    # Bootstrap: resample rows, keep decile assignments from full dataset.
+    boot_means: Dict[int, List[float]] = {d: [] for d in range(1, 11)}
+    for _ in range(n_bootstrap):
+        sample_idx = rng.integers(0, n, size=n)
+        sample = work.iloc[sample_idx]
+        for d in range(1, 11):
+            vals = sample.loc[sample["decile"] == d, revenue_col]
+            boot_means[d].append(float(vals.mean()) if len(vals) > 0 else 0.0)
+
+    ci_rows = []
+    for d in range(1, 11):
+        arr = np.array(boot_means[d])
+        ci_rows.append(
+            {
+                "decile": d,
+                "ci_lower": float(np.percentile(arr, 100 * alpha / 2)),
+                "ci_upper": float(np.percentile(arr, 100 * (1 - alpha / 2))),
+                "ci_level": ci_level,
+                "n_bootstrap": n_bootstrap,
+            }
+        )
+    return pd.DataFrame(ci_rows)
+
+
 def clv_decile_lift_table(
     df_eval: pd.DataFrame,
     clv_col: str = "clv_horizon",
     revenue_col: str = "holdout_revenue",
+    n_bootstrap: int = 500,
+    random_state: int = 42,
 ) -> pd.DataFrame:
     """
     Produce a decile lift table showing how predicted CLV ranks relate to actual holdout revenue.
 
+    Includes 95% bootstrap confidence intervals on avg_holdout_revenue.
     Decile 10 = highest predicted CLV.
+
+    Parameters
+    ----------
+    df_eval:
+        Evaluation DataFrame with customer_id, clv_col, revenue_col.
+    clv_col:
+        Predicted CLV column.
+    revenue_col:
+        Actual holdout revenue column.
+    n_bootstrap:
+        Bootstrap resamples for CI estimation.
+    random_state:
+        Random seed for bootstrap.
+
+    Returns
+    -------
+    pd.DataFrame
+        Decile lift table with lift metric and bootstrap CIs.
     """
     work = df_eval.copy()
     work[clv_col] = work[clv_col].fillna(0.0)
@@ -223,7 +340,7 @@ def clv_decile_lift_table(
 
     # qcut can fail if many ties; use rank to stabilize bins
     work["_rank"] = work[clv_col].rank(method="first")
-    work["decile"] = pd.qcut(work["_rank"], 10, labels=False) + 1
+    work["decile"] = (pd.qcut(work["_rank"], 10, labels=False) + 1).astype(int)
 
     table = (
         work.groupby("decile", as_index=False)
@@ -239,19 +356,62 @@ def clv_decile_lift_table(
     # Lift relative to overall mean revenue
     overall_mean = float(work[revenue_col].mean())
     table["lift_vs_overall_mean"] = table["avg_holdout_revenue"] / overall_mean if overall_mean > 0 else np.nan
+
+    # Bootstrap confidence intervals
+    ci_df = bootstrap_decile_ci(
+        df_eval=work,
+        clv_col=clv_col,
+        revenue_col=revenue_col,
+        n_bootstrap=n_bootstrap,
+        random_state=random_state,
+    )
+    table = table.merge(ci_df[["decile", "ci_lower", "ci_upper"]], on="decile", how="left")
     return table
 
 
 def plot_decile_lift(table: pd.DataFrame, out_path: str) -> None:
-    """Save a decile lift plot (avg holdout revenue by decile)."""
-    plt.figure()
-    plt.plot(table["decile"], table["avg_holdout_revenue"], marker="o")
-    plt.xlabel("Predicted CLV Decile (1=lowest, 10=highest)")
-    plt.ylabel("Average Holdout Revenue")
-    plt.title("CLV Backtest: Holdout Revenue by Predicted CLV Decile")
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=200)
-    plt.close()
+    """
+    Save a decile lift plot with 95% bootstrap confidence intervals.
+
+    The CI band illustrates statistical reliability of the ranking signal.
+    A monotonically increasing curve with non-overlapping CIs across deciles
+    is strong evidence of model utility for targeting decisions.
+
+    Parameters
+    ----------
+    table:
+        Output of clv_decile_lift_table (must contain ci_lower, ci_upper).
+    out_path:
+        File path for the saved figure.
+    """
+    fig, ax = plt.subplots(figsize=(9, 5))
+
+    ax.plot(table["decile"], table["avg_holdout_revenue"], marker="o", color="#2563EB",
+            linewidth=2, label="Avg Holdout Revenue")
+
+    if "ci_lower" in table.columns and "ci_upper" in table.columns:
+        ax.fill_between(
+            table["decile"],
+            table["ci_lower"],
+            table["ci_upper"],
+            alpha=0.20,
+            color="#2563EB",
+            label="95% Bootstrap CI",
+        )
+
+    ax.axhline(table["avg_holdout_revenue"].mean(), color="#6B7280", linestyle="--",
+               linewidth=1, label="Population Mean")
+
+    ax.set_xlabel("Predicted CLV Decile (1=Lowest, 10=Highest)", fontsize=11)
+    ax.set_ylabel("Average Holdout Revenue (£)", fontsize=11)
+    ax.set_title("CLV Model Validation: Holdout Revenue by Predicted CLV Decile", fontsize=12, fontweight="bold")
+    ax.xaxis.set_major_locator(mticker.MultipleLocator(1))
+    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"£{x:,.0f}"))
+    ax.legend(framealpha=0.9)
+    ax.grid(axis="y", alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=200)
+    plt.close(fig)
 
 
 def build_policy_frame(
@@ -341,30 +501,99 @@ def roi_curve(
 
 
 def plot_roi_curve(curve_df: pd.DataFrame, out_path: str) -> None:
-    """Save ROI vs budget plot."""
-    plt.figure()
-    plt.plot(curve_df["budget"], curve_df["roi"], marker="o")
-    plt.xlabel("Budget")
-    plt.ylabel("ROI")
-    plt.title("Policy Simulation: ROI vs Budget")
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=200)
-    plt.close()
+    """
+    Save ROI vs budget plot with diminishing-returns annotation.
+
+    A well-behaved policy shows monotonically decreasing ROI as budget expands:
+    early spend targets the highest net-gain customers; later spend targets
+    progressively lower-value customers.
+
+    Parameters
+    ----------
+    curve_df:
+        Output of roi_curve (must have budget, roi, total_expected_benefit).
+    out_path:
+        File path for the saved figure.
+    """
+    fig, ax1 = plt.subplots(figsize=(9, 5))
+
+    color_roi = "#2563EB"
+    ax1.plot(curve_df["budget"], curve_df["roi"], marker="o", color=color_roi, linewidth=2, label="ROI")
+    ax1.set_xlabel("Retention Budget (£)", fontsize=11)
+    ax1.set_ylabel("Return on Investment (×)", fontsize=11, color=color_roi)
+    ax1.tick_params(axis="y", labelcolor=color_roi)
+    ax1.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{x:.1f}×"))
+    ax1.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"£{x:,.0f}"))
+
+    ax2 = ax1.twinx()
+    color_benefit = "#16A34A"
+    ax2.plot(curve_df["budget"], curve_df["total_expected_benefit"], marker="s", color=color_benefit,
+             linewidth=2, linestyle="--", label="Expected Benefit")
+    ax2.set_ylabel("Total Expected Benefit (£)", fontsize=11, color=color_benefit)
+    ax2.tick_params(axis="y", labelcolor=color_benefit)
+    ax2.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"£{x:,.0f}"))
+
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper right", framealpha=0.9)
+
+    ax1.set_title("Policy Simulation: ROI and Expected Benefit vs Retention Budget",
+                  fontsize=12, fontweight="bold")
+    ax1.grid(axis="y", alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=200)
+    plt.close(fig)
 
 
 def plot_targeted_vs_budget(curve_df: pd.DataFrame, out_path: str) -> None:
-    """Save customers targeted vs budget plot."""
-    plt.figure()
-    plt.plot(curve_df["budget"], curve_df["customers_targeted"], marker="o")
-    plt.xlabel("Budget")
-    plt.ylabel("Customers Targeted")
-    plt.title("Policy Simulation: Customers Targeted vs Budget")
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=200)
-    plt.close()
+    """
+    Save customers targeted vs budget plot.
+
+    This chart supports operational planning: how many customers can be
+    contacted for a given spend level?
+
+    Parameters
+    ----------
+    curve_df:
+        Output of roi_curve (must have budget, customers_targeted).
+    out_path:
+        File path for the saved figure.
+    """
+    fig, ax = plt.subplots(figsize=(9, 5))
+
+    ax.fill_between(curve_df["budget"], curve_df["customers_targeted"], alpha=0.15, color="#7C3AED")
+    ax.plot(curve_df["budget"], curve_df["customers_targeted"], marker="o", color="#7C3AED",
+            linewidth=2, label="Customers Targeted")
+
+    ax.set_xlabel("Retention Budget (£)", fontsize=11)
+    ax.set_ylabel("Customers Targeted", fontsize=11)
+    ax.set_title("Policy Simulation: Customers Targeted vs Retention Budget",
+                 fontsize=12, fontweight="bold")
+    ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"£{x:,.0f}"))
+    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{x:,.0f}"))
+    ax.grid(axis="y", alpha=0.3)
+    ax.legend(framealpha=0.9)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=200)
+    plt.close(fig)
 
 
 def main() -> None:
+    """CLI entry point for Step 7: evaluation and report generation.
+
+    Orchestrates the full evaluation workflow:
+
+    1. Validates that all input files (transactions, CLV scores, churn scores,
+       targeting list) are present on disk.
+    2. Builds the CLV decile-lift table with 95 % bootstrap confidence
+       intervals and saves it to ``reports/tables/``.
+    3. Produces the dual-axis ROI curve (net gain + ROI vs budget) and
+       targeted-customer vs budget plots, saved to ``reports/figures/``.
+    4. Logs a human-readable summary to stdout.
+
+    Invoked by ``python -m src.evaluation.backtesting`` or via the pipeline
+    orchestrator (Step 7 of the weekly scoring pipeline).
+    """
     cfg = parse_args()
     setup_logging(cfg.log_level)
 
@@ -404,8 +633,9 @@ def main() -> None:
     rho = spearman_rank_corr(eval_df["clv_horizon"], eval_df["holdout_revenue"])
     LOGGER.info("CLV ranking quality (Spearman rank correlation vs holdout revenue): %.4f", rho)
 
-    # Decile lift
-    decile_table = clv_decile_lift_table(eval_df)
+    # Decile lift (with 95% bootstrap confidence intervals)
+    LOGGER.info("Computing decile lift table with bootstrap CIs (n_bootstrap=500)...")
+    decile_table = clv_decile_lift_table(eval_df, n_bootstrap=500, random_state=42)
     decile_csv = os.path.join(tables_dir, "clv_decile_lift.csv")
     decile_table.to_csv(decile_csv, index=False)
     LOGGER.info("Wrote decile lift table: %s", decile_csv)

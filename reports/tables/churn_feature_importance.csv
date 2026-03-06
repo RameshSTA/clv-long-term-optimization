@@ -1,0 +1,9 @@
+feature,importance_score,direction,importance_type
+recency_days,0.07665829349513564,increases_churn,mean_abs_shap
+n_invoices,0.0741484811004337,decreases_churn,mean_abs_shap
+revenue_last_90d,0.06459633977376167,decreases_churn,mean_abs_shap
+total_revenue,0.052570684592777625,decreases_churn,mean_abs_shap
+revenue_last_30d,0.019361886431563193,decreases_churn,mean_abs_shap
+tenure_days,0.017093952595592505,increases_churn,mean_abs_shap
+avg_order_value,0.013867493828156632,increases_churn,mean_abs_shap
+rev_30_to_90_ratio,0.013413562860404415,decreases_churn,mean_abs_shap

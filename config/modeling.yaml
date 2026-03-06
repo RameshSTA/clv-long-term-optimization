@@ -6,4 +6,7 @@ clv_model:
 churn_model:
   churn_inactivity_days: 90
   prediction_horizon_days: 180
-  model_type: "logistic"
+  model_type: "auto"
+  eval_gap_days: 60
+  random_state: 42
+  cv_folds: 5

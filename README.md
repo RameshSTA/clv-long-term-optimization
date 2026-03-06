@@ -2,6 +2,7 @@
 
 **A production-grade decision intelligence system: from raw retail transactions to budget-constrained, fully explainable retention targeting with quantified ROI**
 
+[![CI](https://github.com/RameshSTA/clv-long-term-optimization/actions/workflows/ci.yml/badge.svg)](https://github.com/RameshSTA/clv-long-term-optimization/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white)
 ![scikit-learn](https://img.shields.io/badge/scikit--learn-1.3%2B-orange?logo=scikit-learn)
 ![XGBoost](https://img.shields.io/badge/XGBoost-2.0%2B-red)

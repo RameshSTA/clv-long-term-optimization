@@ -24,13 +24,13 @@
   <b>A production-grade decision intelligence system — from raw retail transactions to budget-constrained,<br>fully explainable retention targeting with quantified ROI.</b>
 </p>
 
-<p align="center">
-  <a href="https://www.linkedin.com/in/rameshsta/"><b>LinkedIn</b></a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/RameshSTA"><b>GitHub</b></a>
-  &nbsp;·&nbsp;
-  <b>Ramesh Shrestha</b>
-</p>
+<br>
+
+<div align="center">
+
+[![LinkedIn](https://img.shields.io/badge/LINKEDIN-CONNECT-0077B5?style=for-the-badge&logo=linkedin&logoColor=white&labelColor=555555)](https://www.linkedin.com/in/rameshsta/)&nbsp;&nbsp;[![GitHub](https://img.shields.io/badge/GITHUB-RAMESHSTA-1a2332?style=for-the-badge&logo=github&logoColor=white&labelColor=555555)](https://github.com/RameshSTA)&nbsp;&nbsp;[![View on GitHub](https://img.shields.io/badge/VIEW_ON_GITHUB-1a2332?style=for-the-badge&logo=github&logoColor=white)](https://github.com/RameshSTA/clv-long-term-optimization)
+
+</div>
 
 ---
 
@@ -57,18 +57,18 @@
 
 <div align="center">
 
-| Document | Description |
-|:---|:---|
-| [Model Card](docs/model_card.md) | Algorithm selection, SHAP results, calibration, monitoring thresholds |
-| [Business Problem](docs/business_problem.md) | Problem framing, stakeholder context, success metrics |
-| [Architecture Overview](docs/architecture_overview.md) | System design, data flow, module responsibilities |
-| [Feature Engineering](docs/feature_engineering.md) | Feature design, leakage prevention, cutoff-safe computation |
-| [Evaluation Strategy](docs/evaluation_strategy.md) | Holdout methodology, metric rationale, bootstrap CI design |
-| [Mathematical Intuition](docs/Mathintuition_datascienceframing.md) | BG/NBD + Gamma-Gamma derivations, churn label design |
-| [Business Impact & ROI](docs/business_impact_and_roi.md) | Full ROI narrative, segment strategy, decision framework |
-| [Modeling Assumptions](docs/modeling_assumptions.md) | Assumptions, risks, sensitivity bounds |
-| [Deployment Plan](docs/deployment_plan.md) | Production readiness, monitoring plan, retraining triggers |
-| [Data Quality Rules](docs/data_quality_rules.md) | 7-rule cleaning specification, edge case handling |
+| | Description |
+|:---:|:---|
+| [![Model Card](https://img.shields.io/badge/Model_Card-3A567A?style=for-the-badge&logoColor=white)](docs/model_card.md) | Algorithm selection, SHAP results, calibration, monitoring thresholds |
+| [![Business Problem](https://img.shields.io/badge/Business_Problem-3A567A?style=for-the-badge&logoColor=white)](docs/business_problem.md) | Problem framing, stakeholder context, success metrics |
+| [![Architecture Overview](https://img.shields.io/badge/Architecture_Overview-3A567A?style=for-the-badge&logoColor=white)](docs/architecture_overview.md) | System design, data flow, module responsibilities |
+| [![Feature Engineering](https://img.shields.io/badge/Feature_Engineering-3A567A?style=for-the-badge&logoColor=white)](docs/feature_engineering.md) | Feature design, leakage prevention, cutoff-safe computation |
+| [![Evaluation Strategy](https://img.shields.io/badge/Evaluation_Strategy-3A567A?style=for-the-badge&logoColor=white)](docs/evaluation_strategy.md) | Holdout methodology, metric rationale, bootstrap CI design |
+| [![Mathematical Intuition](https://img.shields.io/badge/Mathematical_Intuition-3A567A?style=for-the-badge&logoColor=white)](docs/Mathintuition_datascienceframing.md) | BG/NBD + Gamma-Gamma derivations, churn label design |
+| [![Business Impact & ROI](https://img.shields.io/badge/Business_Impact_%26_ROI-3A567A?style=for-the-badge&logoColor=white)](docs/business_impact_and_roi.md) | Full ROI narrative, segment strategy, decision framework |
+| [![Modeling Assumptions](https://img.shields.io/badge/Modeling_Assumptions-3A567A?style=for-the-badge&logoColor=white)](docs/modeling_assumptions.md) | Assumptions, risks, sensitivity bounds |
+| [![Deployment Plan](https://img.shields.io/badge/Deployment_Plan-3A567A?style=for-the-badge&logoColor=white)](docs/deployment_plan.md) | Production readiness, monitoring plan, retraining triggers |
+| [![Data Quality Rules](https://img.shields.io/badge/Data_Quality_Rules-3A567A?style=for-the-badge&logoColor=white)](docs/data_quality_rules.md) | 7-rule cleaning specification, edge case handling |
 
 </div>
 
@@ -76,26 +76,19 @@
 
 ## Table of Contents
 
-- [The Business Problem](#the-business-problem)
-- [The Solution](#the-solution)
-- [Key Results](#key-results)
-- [End-to-End Architecture](#end-to-end-architecture)
-- [Step-by-Step: Methods and Findings](#step-by-step-methods-and-findings)
-  - [Data Pipeline](#steps-13-data-pipeline)
-  - [CLV Modeling](#step-4-clv-modeling)
-  - [Churn Risk Modeling](#step-5-churn-risk-modeling)
-  - [Budget Optimization](#step-6-budget-optimization)
-  - [Evaluation](#step-7-backtesting--evaluation)
-  - [Customer Segmentation](#step-8-rfm-customer-segmentation)
-  - [Cohort Analysis](#step-9-cohort-retention-analysis)
-  - [Business Intelligence](#step-10-business-intelligence--pareto)
-  - [Sensitivity Analysis](#step-11-monte-carlo-sensitivity-analysis)
-- [Professional DS Practices](#professional-ds-practices)
-- [Skills Demonstrated](#skills-demonstrated)
-- [How to Run](#how-to-run)
-- [Repository Structure](#repository-structure)
-- [Assumptions, Risks, and Limitations](#assumptions-risks-and-limitations)
-- [Future Improvements](#future-improvements)
+<div align="center">
+
+[![Business Problem](https://img.shields.io/badge/Business_Problem-3A567A?style=flat-square&logoColor=white)](#the-business-problem)&nbsp;[![Solution](https://img.shields.io/badge/Solution-3A567A?style=flat-square&logoColor=white)](#the-solution)&nbsp;[![Key Results](https://img.shields.io/badge/Key_Results-3A567A?style=flat-square&logoColor=white)](#key-results)&nbsp;[![Architecture](https://img.shields.io/badge/Architecture-3A567A?style=flat-square&logoColor=white)](#end-to-end-architecture)
+
+[![Data Pipeline](https://img.shields.io/badge/Data_Pipeline-3A567A?style=flat-square&logoColor=white)](#steps-13-data-pipeline)&nbsp;[![CLV Modeling](https://img.shields.io/badge/CLV_Modeling-3A567A?style=flat-square&logoColor=white)](#step-4-clv-modeling)&nbsp;[![Churn Modeling](https://img.shields.io/badge/Churn_Modeling-3A567A?style=flat-square&logoColor=white)](#step-5-churn-risk-modeling)&nbsp;[![Budget Optimization](https://img.shields.io/badge/Budget_Optimization-3A567A?style=flat-square&logoColor=white)](#step-6-budget-optimization)
+
+[![Evaluation](https://img.shields.io/badge/Evaluation-3A567A?style=flat-square&logoColor=white)](#step-7-backtesting--evaluation)&nbsp;[![RFM Segmentation](https://img.shields.io/badge/RFM_Segmentation-3A567A?style=flat-square&logoColor=white)](#step-8-rfm-customer-segmentation)&nbsp;[![Cohort Analysis](https://img.shields.io/badge/Cohort_Analysis-3A567A?style=flat-square&logoColor=white)](#step-9-cohort-retention-analysis)&nbsp;[![Business Intel](https://img.shields.io/badge/Business_Intel-3A567A?style=flat-square&logoColor=white)](#step-10-business-intelligence--pareto)
+
+[![Sensitivity Analysis](https://img.shields.io/badge/Sensitivity_Analysis-3A567A?style=flat-square&logoColor=white)](#step-11-monte-carlo-sensitivity-analysis)&nbsp;[![DS Practices](https://img.shields.io/badge/DS_Practices-3A567A?style=flat-square&logoColor=white)](#professional-ds-practices)&nbsp;[![Skills](https://img.shields.io/badge/Skills-3A567A?style=flat-square&logoColor=white)](#skills-demonstrated)&nbsp;[![How to Run](https://img.shields.io/badge/How_to_Run-3A567A?style=flat-square&logoColor=white)](#how-to-run)
+
+[![Repo Structure](https://img.shields.io/badge/Repo_Structure-3A567A?style=flat-square&logoColor=white)](#repository-structure)&nbsp;[![Assumptions & Risks](https://img.shields.io/badge/Assumptions_%26_Risks-3A567A?style=flat-square&logoColor=white)](#assumptions-risks-and-limitations)&nbsp;[![Future Work](https://img.shields.io/badge/Future_Work-3A567A?style=flat-square&logoColor=white)](#future-improvements)
+
+</div>
 
 ---
 
@@ -532,7 +525,7 @@ This is decision intelligence: it does not simply rank customers — it allocate
 - **Lost** (20.5% of customers) have 86% churn and negative CLV. Reacquisition cost likely exceeds expected value — deprioritise.
 
 ---
-
+git
 ### Step 9: Cohort Retention Analysis
 
 <div align="center">
@@ -689,7 +682,7 @@ For each draw, the full knapsack policy is recomputed at 12 budget levels.
 |:---|:---|
 | **Statistical & probabilistic modeling** | BG/NBD + Gamma-Gamma CLV; inactivity-based churn label design; discount rate derivation |
 | **Supervised machine learning** | 4-algorithm comparison; stratified k-fold CV; class imbalance handling (`class_weight="balanced"`) |
-| **Model interpretability** | SHAP `TreeExplainer`; mean \|SHAP\| bar; beeswarm scatter; direction analysis |
+| **Model interpretability** | SHAP `TreeExplorer`; mean \|SHAP\| bar; beeswarm scatter; direction analysis |
 | **Model evaluation** | ROC/PR curves; calibration reliability diagram; decile lift; bootstrap CIs; out-of-time holdout |
 | **Mathematical optimisation** | 0/1 Knapsack; integer programming (PuLP/CBC); greedy fallback; economic objective function design |
 | **Uncertainty quantification** | Monte Carlo simulation; tornado chart (OAT sensitivity); 90% CI bands on ROI |
@@ -815,7 +808,7 @@ clv-long-term-optimization/
 │   └── tables/                        # 11 CSV tables (auto-generated by pipeline)
 │
 ├── docs/
-│   ├── model_card.md                  # v2.0: algorithm selection, SHAP, calibration, monitoring
+│   ├── model_card.md
 │   ├── business_problem.md
 │   ├── architecture_overview.md
 │   ├── feature_engineering.md

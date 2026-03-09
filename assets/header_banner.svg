@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 250">
+  <defs>
+    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#3A567A"/>
+      <stop offset="100%" stop-color="#5B7FA6"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="250" fill="url(#headerGrad)"/>
+  <path d="M0,182 C150,158 350,198 600,175 C800,156 1000,188 1200,170 L1200,250 L0,250 Z" fill="white" opacity="0.06"/>
+  <path d="M0,198 C200,178 450,212 700,195 C900,180 1100,205 1200,192 L1200,250 L0,250 Z" fill="white" opacity="0.08"/>
+  <path d="M0,212 C250,196 500,225 750,210 C950,198 1100,218 1200,210 L1200,250 L0,250 Z" fill="white" opacity="0.11"/>
+  <path d="M0,228 C300,215 600,235 900,222 C1050,215 1150,226 1200,222 L1200,250 L0,250 Z" fill="white" opacity="0.16"/>
+  <text x="600" y="80" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="36" font-weight="bold" fill="white">Customer Lifetime Value</text>
+  <text x="600" y="122" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="bold" fill="white">Long-Term Optimization</text>
+  <text x="600" y="158" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="13" fill="rgba(255,255,255,0.82)">Decision Intelligence  ·  Probabilistic Modeling  ·  Constrained Budget Optimization  ·  SHAP Explainability</text>
+</svg>

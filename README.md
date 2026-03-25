@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/header_banner.svg" width="100%" alt="Customer Lifetime Value — Long-Term Optimization"/>
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:1a2c4e,100:4a6b9e&height=230&section=header&text=Longitudinal%20Probabilistic%20Modelling&fontColor=ffffff&fontSize=52&fontAlignY=38&desc=Survival%20Analysis%20%26%20Long-Term%20Forecasting&descColor=b8cceb&descSize=22&descAlignY=63" width="100%" alt="Longitudinal Probabilistic Modelling & Survival Analysis"/>
 </div>
 
 <br>
